@@ -1,0 +1,14 @@
+- [Expo Go connectivity](expo-go-connectivity.md) — a working localhost preview does not prove the public native manifest or bundle is reachable.
+- [Referral presentation](referral-presentation.md) — preserve the user's repeated referral layout requirements during future redesigns.
+- [Font family changes](font-family-changes.md) — change registered family names when replacing fonts; existing Expo font aliases can retain old faces.
+- [Settings presentation](settings-presentation.md) — keep the compact profile and omit shortcuts and row status hints the user repeatedly removed.
+- [KYC demo boundary](kyc-demo-boundary.md) — user chose a demo walkthrough, not real identity verification or biometric liveness.
+- [2FA demo and presentation](twofa-demo-boundary.md) — wallet keypad only, circular OTP indicators and user-defined dummy success/failure animations.
+- [Passkey practice flow](passkey-demo-boundary.md) — dummy credentials with 2FA-like onboarding and Sessions-style individual deletion and add action.
+- [Password practice boundary](password-demo-boundary.md) — Change Password is a dummy full-page flow, not a real account update.
+- [Ticket chat scope](ticket-chat-boundary.md) — dummy conversations retain device-local history; final ticket statuses are read-only.
+- [Scan login scope](scan-login-boundary.md) — dashboard scanner is a dummy web-login walkthrough styled like the KYC face screen.
+- [Onboarding practice](onboarding-practice-boundary.md) — first-launch/logout welcome, dummy signup/login privacy, and explicit protected-route fallback.
+- [Wallet presentation](wallet-presentation.md) — ATH amounts; top toasts, original Referral placement and slightly lower Send/Swap modal feedback.
+- [Statistics calendar](statistics-scope.md) — Dashboard entry; saved local claim days and daily streak; KYC-style rows with session transaction counts.
+- [Notification permission](notification-permission.md) — real mobile-only startup gate, denial illustration and phone Settings action; web entry stays unchanged.

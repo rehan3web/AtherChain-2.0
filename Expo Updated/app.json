@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Mobile App",
+    "slug": "mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mobile",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {},
+    "web": {
+      "favicon": "./assets/images/icon.png",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      ["expo-camera", {
+        "cameraPermission": "Allow AtherChain to show the front camera during the face walkthrough.",
+        "recordAudioAndroid": false,
+        "microphonePermission": false
+      }]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

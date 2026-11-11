@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "3f650d08-def7-4e33-90ae-f404b9600caa"
+      }
+    },
+    "android": {
+      "package": "com.atherchain.app"
+    }
+  }
+}

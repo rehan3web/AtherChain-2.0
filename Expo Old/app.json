@@ -1,0 +1,90 @@
+
+{
+  "expo": {
+    "name": "Ather Chain",
+    "slug": "mobile",
+    "version": "1.1.3",
+    "orientation": "portrait",
+    "icon": "./assets/images/logo.png",
+    "scheme": "mobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/secondary_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0e0f0c"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "associatedDomains": [
+        "webcredentials:atherchain.com"
+      ],
+      "bundleIdentifier": "com.atherchain.app"
+    },
+    "android": {
+      "package": "com.atherchain.app",
+      "versionCode": 2,
+      "usesCleartextTraffic": true,
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "atherchain.com"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/logo.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "minSdkVersion": 28
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "sounds": [],
+          "android": {
+            "useNextNotificationsApi": true
+          }
+        }
+      ],
+      "./plugins/withAndroidGPSHardware.js",
+      "expo-secure-store",
+      "./plugins/withAndroidVerification.js"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8a5d8327-e345-4274-a180-f47a5d183369"
+      }
+    }
+  }
+}

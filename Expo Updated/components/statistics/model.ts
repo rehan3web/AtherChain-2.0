@@ -29,7 +29,7 @@ export function monthDays(year: number, month: number, claimDays: readonly strin
   const today = claimDayKey(now);
   const cells: (CalendarDay | null)[] = Array.from({ length: leading }, () => null);
   for (let day = 1; day <= count; day++) {
-    const key = claimDayKey(new Date(year, month, day, 12).getTime());
+    const key = claimDayKey(Date.UTC(year, month, day, 12));
     cells.push({ key, day, claimed: claimed.has(key), today: key === today });
   }
   while (cells.length % 7) cells.push(null);
@@ -45,7 +45,7 @@ export function activityTotals(activities: readonly Activity[]) {
   const seen = new Set<string>();
   let swaps = 0, transfers = 0;
   for (const item of activities) {
-    if (seen.has(item.id) || item.isSample || !item.receipt) continue;
+    if (seen.has(item.id) || item.isSample || !item.receipt || (item.status && item.status !== 'completed')) continue;
     seen.add(item.id);
     if (item.receipt.type === 'swap') swaps++;
     else if (item.receipt.currency === 'ATH') transfers++;

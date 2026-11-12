@@ -12,10 +12,8 @@ import { useMining } from './useMining';
 import { AtherWatcher } from './AtherWatcher';
 import { RefillMeter } from './RefillMeter';
 import { useToast } from '@/components/toast/ToastProvider';
-import { recordActivity } from '@/components/activity/store';
 
 const F = { r: 'DMSans_400Regular', m: 'DMSans_500Medium', s: 'DMSans_600SemiBold', b: 'DMSans_700Bold' };
-const MAX_BOOSTS = 3;
 const fmt = (v: number, d = 4) => v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 const hms = (ms: number) => {
   const t = Math.max(0, Math.ceil(ms / 1000));
@@ -33,8 +31,7 @@ export default function MiningScreen() {
   const actionHeight = Math.min(62, Math.max(46, Math.min(width, 480) * .132));
   const actionFont = Math.min(21, Math.max(15, Math.min(width, 480) * .046));
   const { clearance } = useDockClearance();
-  const { loading, busy, error, snapshot: s, claim, retry } = useMining();
-  const [boosts, setBoosts] = useState(0);
+  const { loading, busy, error, snapshot: s, claim, retry, boosts, maxBoosts: MAX_BOOSTS, boostEnabled, boost } = useMining();
   const { showToast } = useToast();
   useEffect(() => {
     if (error && !s) showToast({ kind: 'error', title: 'Could not load mining progress', body: error });
@@ -42,26 +39,20 @@ export default function MiningScreen() {
   const top = Platform.OS === 'web' ? 67 : insets.top;
 
   const baseDaily = s ? s.ratePerHour * 24 : 0;
-  // Preview-only: each boost adds one base daily yield to the displayed figure. Claims are unchanged.
-  const previewDaily = baseDaily * (1 + boosts);
+  const previewDaily = s?.cycleReward ?? baseDaily;
   const boostLeft = MAX_BOOSTS - boosts;
   const ready = !!s && s.canClaim;
   const claimDisabled = loading || !s || busy || !s.canClaim;
-  const boostDisabled = !s || boostLeft <= 0;
+  const boostDisabled = !s || boostLeft <= 0 || busy || !boostEnabled;
   const claimLabel = busy ? 'Claiming' : 'Claim';
-  const handleBoost = () => {
+  const handleBoost = async () => {
     if (boostDisabled) return;
-    const next = Math.min(MAX_BOOSTS, boosts + 1);
-    setBoosts(next);
-    recordActivity({
-      id: `boost-${Date.now()}-${next}`,
-      title: 'Boost activated',
-      timestamp: Date.now(),
-      icon: 'zap',
-      value: `${next}/${MAX_BOOSTS}`,
-      preview: true,
-    });
-    showToast({ kind: 'success', title: next === MAX_BOOSTS ? 'Boost fully charged' : 'Boost applied', body: `${next} of ${MAX_BOOSTS} boosts used. Preview only.` });
+    try {
+      await boost();
+      showToast({ kind: 'success', title: 'Boost applied', body: 'Your mining boost was confirmed by the server.' });
+    } catch (cause) {
+      showToast({ kind: 'error', title: 'Boost failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+    }
   };
   const handleClaim = async () => {
     if (claimDisabled) return;
@@ -74,7 +65,7 @@ export default function MiningScreen() {
 
   const rows = [
     { k: 'Total Balance', v: s ? `${fmt(s.totalBalance)} AT` : '—', id: 'total-balance' },
-    { k: boosts > 0 ? 'Daily Yield (preview)' : 'Daily Yield', v: s ? `${fmt(previewDaily)} AT` : '—', id: 'daily-yield' },
+    { k: 'Daily Yield', v: s ? `${fmt(previewDaily)} AT` : '—', id: 'daily-yield' },
     { k: 'Boost Left', v: String(boostLeft), id: 'boost-left' },
     { k: 'Status', v: !s ? '—' : ready ? 'Ready' : 'Refilling', id: 'status' },
   ];
@@ -163,7 +154,7 @@ export default function MiningScreen() {
         {boosts > 0 ? (
           <View accessibilityLiveRegion="polite" style={[tw`w-full mt-4 flex-row items-center gap-2 px-3 py-2 rounded-[10px]`, { maxWidth: 380, backgroundColor: c.miningNotice }]}>
             <Feather name="info" size={13} color={c.miningNoticeInk} />
-            <Text style={[tw`flex-1 text-[11px]`, { color: c.miningNoticeInk, fontFamily: F.m }]}>Boost preview only; claim rewards unchanged.</Text>
+            <Text style={[tw`flex-1 text-[11px]`, { color: c.miningNoticeInk, fontFamily: F.m }]}>Boost rewards and availability are controlled by the server.</Text>
           </View>
         ) : null}
         {error && s ? (
@@ -174,7 +165,7 @@ export default function MiningScreen() {
           <ScalePressable
             testID="mining-boost"
             accessibilityRole="button"
-            accessibilityLabel={`Boost preview, ${boostLeft} left`}
+            accessibilityLabel={`Boost mining, ${boostLeft} left`}
             accessibilityHint="Changes the displayed daily yield only. Claim rewards are unchanged."
             accessibilityState={{ disabled: boostDisabled }}
             disabled={boostDisabled}
@@ -207,7 +198,7 @@ export default function MiningScreen() {
         </View>
 
         <Text style={[tw`text-[10px] text-center mt-5`, { color: c.walletMuted, fontFamily: F.r }]}>
-          Demo only. AT is a reference unit with no real value, stored on this device.
+          Mining eligibility and AT rewards are recorded by AtherChain. Availability follows server rules.
         </Text>
       </ScrollView>
     </View>

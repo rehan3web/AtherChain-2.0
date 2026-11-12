@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { copyText } from '@/utils/clipboard';
@@ -6,16 +6,19 @@ import { toQR } from 'toqr';
 import { useColors } from '@/hooks/useColors';
 import type { RecipientMethod } from './types';
 import { useToast } from '@/components/toast/ToastProvider';
-
-const DETAILS = [
-  { id: 'address', label: 'Address', icon: 'hash', tint: 'walletContactRemy', value: 'AT-DEMO-7K3M-9Q2R-8X4V-6N5C' },
-  { id: 'email', label: 'Email', icon: 'mail', tint: 'walletContactZane', value: 'wallet@atherchain.example' },
-  { id: 'username', label: 'Username', icon: 'at-sign', tint: 'walletContactMaya', value: '@atherchain_demo' },
-] as const;
+import { walletApi } from '@/services/api';
+import { useBackendResource } from '@/hooks/useBackendResource';
 
 export function ReceiveSheet() {
   const c = useColors();
   const { showToast } = useToast();
+  const { data, error } = useBackendResource(walletApi.stats);
+  useEffect(() => { if (error) showToast({ kind: 'error', title: 'Receive details', body: error }); }, [error, showToast]);
+  const DETAILS = [
+    { id: 'address', label: 'Address', icon: 'hash', tint: 'walletContactRemy', value: data?.wallet_address ?? '' },
+    { id: 'email', label: 'Email', icon: 'mail', tint: 'walletContactZane', value: data?.email ?? '' },
+    { id: 'username', label: 'Username', icon: 'at-sign', tint: 'walletContactMaya', value: data?.username ? `@${data.username}` : '' },
+  ] as const;
   const { width } = useWindowDimensions();
   const [method, setMethod] = useState<RecipientMethod>('address');
   const [copyState, setCopyState] = useState<{ method: RecipientMethod; ok: boolean } | null>(null);
@@ -41,6 +44,7 @@ export function ReceiveSheet() {
   const copy = async () => {
     const target = selected;
     try {
+      if (!target.value) throw new Error('Your receive details have not loaded.');
       await copyText(target.value);
       setCopyState({ method: target.id, ok: true });
       showToast({ kind: 'success', title: `${target.label} copied`, body: 'Ready to paste.' });
@@ -80,7 +84,7 @@ export function ReceiveSheet() {
         testID={`wallet-receive-qr-${method}`}
         accessible
         accessibilityRole="image"
-        accessibilityLabel={`QR code for demo ${selected.label.toLowerCase()}: ${selected.value}`}
+        accessibilityLabel={`QR code for ${selected.label.toLowerCase()}: ${selected.value}`}
         style={[styles.qr, { width: qrSize, height: qrSize, backgroundColor: c.walletQRBackground }]}
       >
         {qr.runs.map((run, index) => (
@@ -111,7 +115,7 @@ export function ReceiveSheet() {
         <Text selectable testID={`wallet-receive-value-${method}`} style={[styles.value, { color: c.walletInk }]}>{selected.value}</Text>
         {(copied || failed) && <Text accessibilityLiveRegion="polite" style={[styles.feedback, { color: failed ? c.walletError : c.walletPositive }]}>{failed ? 'Could not copy. Try again.' : `${selected.label} copied`}</Text>}
       </View>
-      <Text style={[styles.note, { color: c.walletSubtle }]}>Demo details only. These identifiers do not accept payments.</Text>
+      <Text style={[styles.note, { color: c.walletSubtle }]}>Use these account identifiers to receive supported transfers within AtherChain.</Text>
     </View>
   );
 }

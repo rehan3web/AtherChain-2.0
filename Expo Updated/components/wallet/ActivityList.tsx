@@ -23,7 +23,7 @@ export function ActivityList({ transactions, money: m, locale, onSelect }: { tra
           key={t.id}
           accessible
           accessibilityRole="button"
-          accessibilityHint="Open demo transaction receipt"
+          accessibilityHint="Open transaction receipt"
           accessibilityLabel={`${t.title}, ${fmtDate(t.date, locale)}, ${t.amount > 0 ? 'received' : 'sent'} ${formatReceiptAmount(m, Math.abs(t.amount))}`}
           testID={`wallet-transaction-${t.id}`}
           onPress={() => onSelect(t)}

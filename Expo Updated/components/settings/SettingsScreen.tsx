@@ -128,7 +128,7 @@ export function SettingsScreen() {
         {shown === 'appearance' && <AppearancePanel />}
         {shown === 'logout' && <View style={{ gap: 16, paddingTop: 12 }}>
           <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 15, lineHeight: 22, color: c.walletSubtle }}>
-            Return to the welcome screen? Your local wallet preview, profile and ticket history will stay on this device. No real account is signed out.
+            Sign out of your AtherChain account and return to the welcome screen? Your account data remains on the server.
           </Text>
           {!!logoutError && <Text testID="settings-logout-error" accessibilityRole="alert" style={{ fontFamily: 'DMSans_400Regular', color: c.walletError }}>{logoutError}</Text>}
           <PrimaryButton testID="settings-logout-confirm" label={loggingOut ? 'Logging out…' : 'Log out'} disabled={loggingOut} onPress={() => { void logOut(); }} />

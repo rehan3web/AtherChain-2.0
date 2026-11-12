@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -25,7 +25,9 @@ export function SessionsScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { sessions, signOutSession, signOutAll } = useSessions();
+  const { sessions, signOutSession, signOutAll, error } = useSessions();
+  const submitting = useRef(false);
+  useEffect(() => { if (error) showToast({ kind: 'error', title: 'Sessions', body: error }); }, [error, showToast]);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [shown, setShown] = useState<Confirm>(null);
 
@@ -33,18 +35,23 @@ export function SessionsScreen() {
   const ask = (next: NonNullable<Confirm>) => { setShown(next); setConfirm(next); };
   const close = () => setConfirm(null);
 
-  const run = () => {
-    if (!shown || !confirm) return;
+  const run = async () => {
+    if (!shown || !confirm || submitting.current) return;
+    submitting.current = true;
+    try {
     if (shown.kind === 'one') {
-      const ok = signOutSession(shown.session.id);
+      const ok = await signOutSession(shown.session.id);
       showToast(ok
-        ? { kind: 'success', title: 'Session removed', body: `${shown.session.device} was removed from this demo list.` }
+        ? { kind: 'success', title: 'Session removed', body: `${shown.session.device} was signed out.` }
         : { kind: 'error', title: 'Session not found', body: 'It may already have been removed.' });
     } else {
-      const n = signOutAll();
-      showToast({ kind: 'success', title: 'Sessions cleared', body: n === 1 ? '1 local demo session was removed.' : `${n} local demo sessions were removed.` });
+      const n = await signOutAll();
+      showToast({ kind: 'success', title: 'Sessions cleared', body: n === 1 ? '1 session was signed out.' : `${n} sessions were signed out.` });
     }
     close();
+    } catch (cause) {
+      showToast({ kind: 'error', title: 'Sign out failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+    } finally { submitting.current = false; }
   };
 
   const top = (Platform.OS === 'web' ? 67 : insets.top) + 8;
@@ -65,7 +72,7 @@ export function SessionsScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24, flexGrow: 1, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
         <Text accessibilityRole="header" style={{ color: c.walletInk, fontFamily: 'DMSans_700Bold', fontSize: 30, letterSpacing: -0.8 }}>Sessions</Text>
         <Text style={[body, { marginTop: 10 }]}>
-          Local demo sessions for this app. Signing out removes these entries only; it does not end real account logins.
+          Active sign-ins for your account. Signing out a session revokes its access on the server.
         </Text>
 
         {empty ? (
@@ -75,7 +82,7 @@ export function SessionsScreen() {
             </View>
             <Text style={{ color: c.walletInk, fontFamily: 'DMSans_600SemiBold', fontSize: 18, marginTop: 18 }}>No sessions listed</Text>
             <Text style={[body, { textAlign: 'center', marginTop: 6 }]}>
-              Every local demo session has been removed. The list resets the next time the app starts.
+              No active account sessions are listed.
             </Text>
           </View>
         ) : (
@@ -121,9 +128,9 @@ export function SessionsScreen() {
       <Sheet open={confirm !== null} title={shown?.kind === 'all' ? 'Log out all sessions?' : 'Sign out session?'} onClose={close} onExited={() => setShown(null)}>
         <Text style={[body, { marginBottom: 20 }]}>
           {shown?.kind === 'all'
-            ? `This removes all ${sessions.length === 1 ? '1 session' : `${sessions.length} sessions`} from the list, including the current local session for this app. It is a demo action and does not end any real account login.`
+            ? `This signs out all ${sessions.length === 1 ? '1 session' : `${sessions.length} sessions`}, including this device.`
             : shown?.kind === 'one'
-              ? `${shown.session.device}${shown.session.current ? ' (this app)' : ''} will be removed from this local demo list. No real account login is affected.`
+              ? `${shown.session.device}${shown.session.current ? ' (this app)' : ''} will be signed out of your account.`
               : ''}
         </Text>
         <View style={{ gap: 10 }}>

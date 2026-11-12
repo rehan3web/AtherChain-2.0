@@ -17,15 +17,13 @@ const PANELS = {
   statistics: { title: 'Statistics', icon: 'bar-chart-2', heading: 'Mining statistics', body: '' },
   referral: { title: 'Referral', icon: 'users', heading: 'Invite your community', body: '' },
   news: { title: 'News', icon: 'file-text', heading: 'AtherChain news', body: '' },
-  help: { title: 'Help', icon: 'help-circle', heading: 'How can we help?', body: 'Guides and support will be available here. This is a demo preview.' },
+  help: { title: 'Help', icon: 'help-circle', heading: 'How can we help?', body: 'Create a support ticket or follow your existing conversations.' },
   scan: { title: 'Scan', icon: 'maximize', heading: '', body: '' },
   notifications: { title: 'Notifications', icon: 'bell', heading: '', body: '' },
 } as const;
 type Panel = keyof typeof PANELS;
 const SHORTCUTS: Panel[] = ['statistics', 'referral', 'news', 'help'];
 const number = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
-// Display-only demo total; no strike accrual is implemented.
-const DEMO_STRIKE_AT = 0;
 
 export function DashboardScreen() {
   const c = useColors();
@@ -93,7 +91,7 @@ export function DashboardScreen() {
           <View style={styles.strike}>
             <Feather name="trending-up" size={16} color={c.walletMuted} />
             <Text style={[styles.strikeLabel, { color: c.walletSubtle }]}>Total strike</Text>
-            <Text testID="dashboard-total-strike" style={[styles.strikeValue, { color: c.walletSubtle }]}>{number.format(DEMO_STRIKE_AT)} AT</Text>
+            <Text testID="dashboard-total-strike" style={[styles.strikeValue, { color: c.walletSubtle }]}>— AT</Text>
           </View>
         </View>
         {error && (

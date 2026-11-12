@@ -1,6 +1,6 @@
 export type PasswordErrors = { current?: string; next?: string; confirm?: string };
 
-// Form-only practice validation: never verifies or stores a real credential.
+// Local format checks only. The backend verifies the current password.
 export function validatePasswordChange(current: string, next: string, confirm: string): PasswordErrors {
   const errors: PasswordErrors = {};
   if (!current.trim()) errors.current = 'Enter a made-up current password.';

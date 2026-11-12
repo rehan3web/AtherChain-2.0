@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -22,12 +22,16 @@ export function NotificationsScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, markRead, markAllRead, error } = useNotifications();
+  const reportError = (cause: unknown) => showToast({ kind: 'error', title: 'Notifications', body: cause instanceof Error ? cause.message : String(cause) });
+  useEffect(() => { if (error) showToast({ kind: 'error', title: 'Notifications', body: error }); }, [error, showToast]);
 
   const back = () => { if (router.canGoBack()) router.back(); else router.replace('/'); };
-  const readAll = () => {
-    const n = markAllRead();
-    showToast({ kind: 'success', title: 'All caught up', body: n === 1 ? '1 notification marked as read.' : `${n} notifications marked as read.` });
+  const readAll = async () => {
+    try {
+      const n = await markAllRead();
+      showToast({ kind: 'success', title: 'All caught up', body: n === 1 ? '1 notification marked as read.' : `${n} notifications marked as read.` });
+    } catch (cause) { reportError(cause); }
   };
 
   const top = (Platform.OS === 'web' ? 67 : insets.top) + 8;
@@ -64,7 +68,7 @@ export function NotificationsScreen() {
             </Text>
             {notifications.map((n, i) => (
               <Pressable key={n.id} testID={`notifications-item-${n.id}`}
-                onPress={() => { if (!n.read) markRead(n.id); }}
+                onPress={() => { if (!n.read) void markRead(n.id).catch(reportError); }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: !n.read }}
                 accessibilityLabel={`${n.read ? 'Read' : 'Unread'} ${KIND[n.kind]} notification: ${n.title}. ${n.body}. ${stamp(n.createdAt)}`}

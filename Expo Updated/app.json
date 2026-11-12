@@ -8,9 +8,22 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.atherchain.app",
+      "associatedDomains": ["webcredentials:atherchain.com"]
     },
-    "android": {},
+    "android": {
+      "package": "com.atherchain.app",
+      "intentFilters": [{
+        "action": "VIEW",
+        "autoVerify": true,
+        "data": [{ "scheme": "https", "host": "atherchain.com" }],
+        "category": ["BROWSABLE", "DEFAULT"]
+      }]
+    },
+    "extra": {
+      "eas": { "projectId": "8a5d8327-e345-4274-a180-f47a5d183369" }
+    },
     "web": {
       "favicon": "./assets/images/icon.png",
       "output": "static"
@@ -18,8 +31,9 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
+      "expo-secure-store",
       ["expo-camera", {
-        "cameraPermission": "Allow AtherChain to show the front camera during the face walkthrough.",
+        "cameraPermission": "Allow AtherChain to capture identity documents and face photos for verification.",
         "recordAudioAndroid": false,
         "microphonePermission": false
       }]

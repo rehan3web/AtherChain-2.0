@@ -15,7 +15,7 @@ import { useToast } from '@/components/toast/ToastProvider';
 const METHODS: { id: RecipientMethod; label: string; icon: 'mail' | 'at-sign' | 'hash'; tint: 'walletContactZane' | 'walletContactMaya' | 'walletContactRemy'; ink: string; placeholder: string; keyboard: 'email-address' | 'default'; help: string }[] = [
   { id: 'email', label: 'Email', icon: 'mail', tint: 'walletContactZane', ink: '#2f6b3a', placeholder: 'Email', keyboard: 'email-address', help: "Enter the recipient's email address." },
   { id: 'username', label: 'Username', icon: 'at-sign', tint: 'walletContactMaya', ink: '#4f3f8f', placeholder: 'Username', keyboard: 'default', help: '3 to 32 letters, numbers, underscores or dots.' },
-  { id: 'address', label: 'Address', icon: 'hash', tint: 'walletContactRemy', ink: '#8f2f3a', placeholder: 'Address', keyboard: 'default', help: 'Demo only: network and ownership of this address are not verified.' },
+  { id: 'address', label: 'Address', icon: 'hash', tint: 'walletContactRemy', ink: '#8f2f3a', placeholder: 'Address', keyboard: 'default', help: 'Enter an AtherChain wallet address. External transfers are not supported.' },
 ];
 
 
@@ -105,16 +105,12 @@ export function TransferSheet({
       if (Math.round(review.amount * 100) > Math.round(balance * 100)) throw new Error('Not enough balance. Nothing was sent.');
       const confirmedReceipt = await onSubmit(review);
       if (!mounted.current) return;
+      if (!confirmedReceipt?.reference || confirmedReceipt.demo)
+        throw new Error('The backend did not confirm this transfer. Check history before retrying.');
       succeeded = true;
       setStatus('confirmed');
       showToast({ kind: 'success', title: demo ? 'Demo send confirmed' : 'Send confirmed', body: 'Your receipt is ready.' });
-      const receipt: SendReceiptData = confirmedReceipt ?? {
-        ...review,
-        recipient: { ...review.recipient },
-        reference: `${demo ? 'demo' : 'local'}-send-${uid()}`,
-        createdAt: new Date().toLocaleString(),
-        demo: !!demo,
-      };
+      const receipt: SendReceiptData = confirmedReceipt;
       receiptTimer.current = setTimeout(() => {
         if (mounted.current) onReceipt(receipt);
       }, 650);

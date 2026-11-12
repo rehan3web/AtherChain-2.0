@@ -7,12 +7,13 @@ import { useColors } from '@/hooks/useColors';
 import { NumericKeypad } from '@/components/wallet/NumericKeypad';
 import { BACKSPACE } from '@/components/wallet/format';
 import { CodeCircles, type Phase } from '@/components/twofa/CodeCircles';
-import { CODE_LENGTH, DEMO_REJECT_CODE } from '@/components/twofa/demo';
+import { CODE_LENGTH } from '@/components/twofa/demo';
 import { Heading, PrimaryButton, Progress, s } from '@/components/kyc/parts';
-import { enterDemo } from './session';
+import { completeLogin } from './session';
+import { authApi } from '@/services/api';
 
 /** OTP step. Code lives only in component state; `onDone` clears the parent draft. */
-export function SignupOtp({ maskedEmail, onDone, onBack, cancelRef }: { maskedEmail: string; onBack: () => void; onDone: () => void; cancelRef: React.MutableRefObject<() => boolean> }) {
+export function SignupOtp({ email, maskedEmail, onDone, onBack, cancelRef }: { email: string; maskedEmail: string; onBack: () => void; onDone: () => void; cancelRef: React.MutableRefObject<() => boolean> }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [code, setCode] = useState('');
@@ -22,6 +23,7 @@ export function SignupOtp({ maskedEmail, onDone, onBack, cancelRef }: { maskedEm
   const active = useRef(true);
   const operation = useRef(0);
   const busy = useRef(false);
+  const verifiedToken = useRef<string | null>(null);
 
   const cancel = useCallback(() => {
     operation.current++;
@@ -38,31 +40,53 @@ export function SignupOtp({ maskedEmail, onDone, onBack, cancelRef }: { maskedEm
     return () => sub.remove();
   }, [cancel]);
 
+  const verify = async (otp: string) => {
+    const run = operation.current;
+    busy.current = true; setSaving(true); setSaveError(null);
+    try {
+      const result = await authApi.verifyEmail(email, otp);
+      if (!active.current || run !== operation.current) return;
+      if (!result.token) throw new Error('The backend did not return a verified session.');
+      verifiedToken.current = result.token;
+      if (active.current) setPhase('success');
+    } catch (cause) {
+      if (active.current) {
+        setSaveError(cause instanceof Error ? cause.message : 'Email verification failed.');
+        setPhase('error');
+      }
+    } finally { busy.current = false; if (active.current) setSaving(false); }
+  };
   const onKey = (k: string) => {
     if (phase !== 'entry' || busy.current) return;
     if (k === BACKSPACE) { setCode(v => v.slice(0, -1)); return; }
     if (!/^\d$/.test(k) || code.length >= CODE_LENGTH) return;
     const next = code + k;
     setCode(next);
-    if (next.length === CODE_LENGTH) setPhase(next === DEMO_REJECT_CODE ? 'error' : 'success');
+    if (next.length === CODE_LENGTH) void verify(next);
   };
 
   const save = useCallback(async () => {
     if (busy.current) return;
     busy.current = true; setSaving(true); setSaveError(null);
     try {
-      await enterDemo();
+      if (!verifiedToken.current) {
+        busy.current = false;
+        setSaving(false);
+        await verify(code);
+        return;
+      }
+      await completeLogin(verifiedToken.current);
       if (!active.current) return;
       setCode('');
       onDone();
       router.replace('/');
-    } catch {
-      if (active.current) setSaveError('Could not open the practice wallet. Try again.');
+    } catch (cause) {
+      if (active.current) setSaveError(cause instanceof Error ? cause.message : 'Could not open your account. Please retry.');
     } finally {
       busy.current = false;
       if (active.current) setSaving(false);
     }
-  }, [onDone]);
+  }, [onDone, code, email]);
 
   const currentOperation = operation.current;
   const onFinished = useCallback(() => {
@@ -90,7 +114,7 @@ export function SignupOtp({ maskedEmail, onDone, onBack, cancelRef }: { maskedEm
         contentContainerStyle={[wrap, { flexGrow: 1, paddingTop: 8, paddingBottom: bottom }]}>
         <Progress step={8} total={8} />
         <Heading eyebrow="Step 8 of 8" title="Enter the email code"
-          body={`Practice email check for ${maskedEmail}. No email is sent. Any six digits pass; try 123456 to see a rejected code.`} />
+          body={`Enter the six-digit verification code sent to ${maskedEmail}. Only the code sent by AtherChain will be accepted.`} />
         <View style={{ flex: 1, minHeight: 100, justifyContent: 'center' }}>
           <CodeCircles filled={code.length} phase={phase} onFinished={onFinished} />
           <Text accessibilityLiveRegion="polite" style={[s.rowSub, { textAlign: 'center', marginTop: 4, minHeight: 18, color: msgColor }]}>{msg}</Text>

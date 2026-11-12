@@ -27,7 +27,7 @@ export function DemoQr({ value }: { value: string }) {
   const size = (qr.side + 8) * cell;
   return (
     <View testID="twofa-qr" accessible accessibilityRole="image"
-      accessibilityLabel="QR code for a practice setup key. Account security is unchanged."
+      accessibilityLabel="Private authenticator setup QR code"
       style={{ alignSelf: 'center', width: size, height: size, borderRadius: 16, overflow: 'hidden', backgroundColor: c.walletQRBackground }}>
       {qr.runs.map((r, i) => (
         <View key={i} style={{ position: 'absolute', top: (r.row + 4) * cell, left: (r.start + 4) * cell, width: r.length * cell, height: cell, backgroundColor: c.walletQRInk }} />

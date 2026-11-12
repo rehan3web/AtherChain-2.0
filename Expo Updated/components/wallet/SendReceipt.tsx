@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { copyText } from '@/utils/clipboard';
@@ -14,6 +14,7 @@ export type SendReceiptData = SendDraft & {
   direction?: 'sent' | 'received';
   transactionTitle?: string;
   methodLabel?: string;
+  status?: string;
 };
 
 export function SendReceipt({ receipt, money, onClose }: { receipt: SendReceiptData; money: Money; onClose: () => void }) {
@@ -40,7 +41,7 @@ export function SendReceipt({ receipt, money, onClose }: { receipt: SendReceiptD
       <View testID="wallet-send-receipt" style={[styles.page, { backgroundColor: c.miningPage, paddingTop: (Platform.OS === 'web' ? 67 : insets.top) + 24 }]}>
         <View style={styles.header}>
           <Pressable testID="wallet-send-receipt-close" onPress={onClose} accessibilityRole="button" accessibilityLabel="Close send receipt" style={styles.button}><Feather name="x" size={24} color={c.walletInk} /></Pressable>
-          <Pressable testID="wallet-send-receipt-share" onPress={() => showToast({ kind: 'info', title: 'Receipt sharing', body: 'Nothing was shared. This feature is a preview.' })} accessibilityRole="button" accessibilityLabel="Share send receipt" accessibilityHint="Demo button; does not share anything" style={styles.button}><Feather name="share" size={22} color={c.walletInk} /></Pressable>
+          <Pressable testID="wallet-send-receipt-share" onPress={() => { void Share.share({ message: `${receipt.transactionTitle ?? 'AtherChain transaction'}\n${amount}\n${receipt.createdAt}\n${receipt.reference}` }).catch(() => showToast({ kind: 'error', title: 'Could not share receipt', body: 'Please retry.' })); }} accessibilityRole="button" accessibilityLabel="Share send receipt" accessibilityHint="Opens the share sheet" style={styles.button}><Feather name="share" size={22} color={c.walletInk} /></Pressable>
         </View>
         <ScrollView testID="wallet-send-receipt-body" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 34) }]}>
             <View testID="wallet-send-receipt-summary" style={styles.summary}>
@@ -51,7 +52,7 @@ export function SendReceipt({ receipt, money, onClose }: { receipt: SendReceiptD
             <View testID="wallet-send-receipt-details" style={styles.details}>
               <View testID="wallet-send-receipt-status" style={[styles.status, { borderBottomColor: c.walletDisabled }]}>
                 <Text style={[styles.note, { color: c.walletSubtle }]}>Status</Text>
-                <View style={styles.confirmed}><ConfirmedIcon /><Text style={[styles.value, { color: c.walletPositive }]}>Confirmed</Text></View>
+                <View style={styles.confirmed}><ConfirmedIcon /><Text style={[styles.value, { color: c.walletPositive }]}>{receipt.status && receipt.status !== 'completed' ? receipt.status : 'Confirmed'}</Text></View>
               </View>
               <SendDetail testID="wallet-send-receipt-type" label="Type" value={received ? 'Receive' : 'Send'} />
               <View testID="wallet-send-receipt-reference-row" style={[styles.reference, { borderBottomColor: c.walletDisabled }]}>

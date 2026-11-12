@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { useToast } from '@/components/toast/ToastProvider';
 import { Heading, Notice, PrimaryButton, s } from '@/components/kyc/parts';
 import { validatePasswordChange, type PasswordErrors } from './validation';
+import { userApi } from '@/services/api';
 
 type Key = 'current' | 'next' | 'confirm';
 
@@ -45,6 +46,7 @@ export function ChangePasswordScreen() {
   const [errors, setErrors] = useState<PasswordErrors>({});
   const nextRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const confirmRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const pending = useRef(false);
 
   const back = () => { if (router.canGoBack()) router.back(); else router.replace('/(tabs)/settings'); };
   const set = (k: Key) => (v: string) => {
@@ -52,14 +54,21 @@ export function ChangePasswordScreen() {
     if (errors[k]) setErrors((p) => ({ ...p, [k]: undefined }));
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (pending.current) return;
     const e = validatePasswordChange(vals.current, vals.next, vals.confirm);
     setErrors(e);
     if (e.current || e.next || e.confirm) return;
-    setVals({ current: '', next: '', confirm: '' });
-    Keyboard.dismiss();
-    showToast({ kind: 'success', title: 'Password practice complete', body: 'Practice only. No real password was changed or saved.' });
-    back();
+    pending.current = true;
+    try {
+      await userApi.changePassword(vals.current, vals.next);
+      setVals({ current: '', next: '', confirm: '' });
+      Keyboard.dismiss();
+      showToast({ kind: 'success', title: 'Password changed', body: 'Your account password was updated.' });
+      back();
+    } catch (cause) {
+      showToast({ kind: 'error', title: 'Password change failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+    } finally { pending.current = false; }
   };
 
   const top = (Platform.OS === 'web' ? 67 : insets.top) + 8;
@@ -76,7 +85,7 @@ export function ChangePasswordScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24, flexGrow: 1, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
-          <Heading title="Change password" body="Practice the steps with made-up values. Nothing is sent or stored, and no real account is updated." />
+          <Heading title="Change password" body="Enter your current password and choose a new password for your account." />
           <PasswordField label="Current password" value={vals.current} onChange={set('current')} error={errors.current}
             inputId="password-current" toggleId="password-toggle-current" errorId="password-error-current" onSubmit={() => nextRef.current?.focus()} />
           <PasswordField label="New password" value={vals.next} onChange={set('next')} error={errors.next} inputRef={nextRef}

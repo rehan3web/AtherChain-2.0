@@ -12,6 +12,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { proxyApi } = require('./api-proxy');
 
 const STATIC_ROOT = path.resolve(__dirname, '..', 'static-build');
 const TEMPLATE_PATH = path.resolve(__dirname, 'templates', 'landing-page.html');
@@ -127,6 +128,7 @@ const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, 'utf-8');
 const appName = getAppName();
 
 const server = http.createServer((req, res) => {
+  if (req.url?.startsWith('/api/')) return proxyApi(req, res, () => {});
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
   let pathname = url.pathname;
 

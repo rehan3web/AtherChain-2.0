@@ -154,7 +154,7 @@ export function MoneyCard({
                   ) : (
                     <AnimatedAmount
                       value={balance}
-                      format={(v) => m.num(v)}
+                      format={(v) => Number.isFinite(balance) ? m.num(v) : '—'}
                       style={[styles.balance, { fontSize: clamp(30, 10.6 * q, 54), color: c.walletOnBlue }]}
                     />
                   )}
@@ -293,7 +293,7 @@ export function MoneyCard({
           }
         }}
       >
-        {sheet?.type === 'swap' && <SwapSheet balance={balance} onReviewChange={setSwapReview} onReceipt={(receipt) => {
+        {sheet?.type === 'swap' && <SwapSheet balance={balance} onReviewChange={setSwapReview} onBusyChange={busy => { locked.current = busy; }} onReceipt={(receipt) => {
           pendingReceipt.current = receipt;
           setOpen(false);
         }} />}
@@ -367,7 +367,7 @@ function LastTx({ tx, q, locale, fmt, onPress }: { tx: Transaction; q: number; l
     <Pressable
       accessible
       accessibilityRole="button"
-      accessibilityHint="Open demo transaction receipt"
+                accessibilityHint="Open transaction receipt"
       onPress={onPress}
       accessibilityLabel={`Last transaction: ${tx.title}, ${fmtDate(tx.date, locale)}, ${tx.amount > 0 ? 'received' : 'sent'} ${fmt(Math.abs(tx.amount))}`}
       testID="wallet-last-transaction"

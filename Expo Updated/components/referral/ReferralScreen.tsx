@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -7,10 +7,8 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useColors } from '@/hooks/useColors';
 import { useToast } from '@/components/toast/ToastProvider';
 import { copyText } from '@/utils/clipboard';
-
-const REFERRAL_CODE = '93q74093';
-const INVITE_MESSAGE =
-  'I’d like to invite you to explore AtherChain, a personal AT wallet and device-local mining demo. Referral rewards are currently a preview, not credited funds.';
+import { referralApi } from '@/services/api';
+import { useBackendResource } from '@/hooks/useBackendResource';
 
 function InviteArt() {
   const c = useColors();
@@ -46,6 +44,11 @@ export function ReferralScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
+  const { data, error } = useBackendResource(referralApi.stats);
+  useEffect(() => { if (error) showToast({ kind: 'error', title: 'Referrals', body: error }); }, [error, showToast]);
+  const REFERRAL_CODE = data?.referralCode ?? '';
+  const INVITE_MESSAGE = data ? `Join me on AtherChain using my referral code ${REFERRAL_CODE}: ${data.referralLink}` : '';
+  const verified = data?.referrals?.filter((item: { kyc_status: string }) => item.kyc_status === 'approved').length ?? 0;
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [copying, setCopying] = useState(false);
@@ -57,6 +60,7 @@ export function ReferralScreen() {
     copyingRef.current = true;
     setCopying(true);
     try {
+      if (!REFERRAL_CODE) throw new Error('Your referral code has not loaded.');
       await copyText(REFERRAL_CODE);
       showToast({ kind: 'success', title: 'Referral code copied' });
     } catch {
@@ -72,6 +76,7 @@ export function ReferralScreen() {
     busyRef.current = true;
     setBusy(true);
     try {
+      if (!INVITE_MESSAGE) throw new Error('Your referral link has not loaded.');
       if (Platform.OS === 'web') {
         await copyText(INVITE_MESSAGE);
         showToast({ kind: 'success', title: 'Invitation copied', body: 'Paste it anywhere to invite a friend.' });
@@ -105,17 +110,17 @@ export function ReferralScreen() {
 
         <View style={[styles.card, { backgroundColor: c.walletSurfaceTop, borderColor: c.walletDisabled }]}>
           <View style={styles.row}>
-            <Stat icon="user-plus" value="5 AT" label="Sign Up Reward" />
+            <Stat icon="user-plus" value={data ? `${data.config.unverifiedReward} AT` : '—'} label="Sign Up Reward" />
             <View style={[styles.vdiv, { backgroundColor: c.walletDisabled }]} />
-            <Stat icon="shield" value="10 AT" label="KYC Reward" />
+            <Stat icon="shield" value={data ? `${data.config.verifiedReward} AT` : '—'} label="KYC Reward" />
           </View>
           <View style={[styles.hdiv, { backgroundColor: c.walletDisabled }]} />
           <View style={styles.row}>
-            <Stat icon="user" value="5" label={'Unverified\nReferrals'} />
+            <Stat icon="user" value={data ? String(data.totalReferrals - verified) : '—'} label={'Unverified\nReferrals'} />
             <View style={[styles.vdiv, { backgroundColor: c.walletDisabled }]} />
-            <Stat icon="user-check" value="10" label={'Verified\nReferrals'} />
+            <Stat icon="user-check" value={data ? String(verified) : '—'} label={'Verified\nReferrals'} />
             <View style={[styles.vdiv, { backgroundColor: c.walletDisabled }]} />
-            <Stat icon="users" value="15" label={'Total\nReferrals'} />
+            <Stat icon="users" value={data ? String(data.totalReferrals) : '—'} label={'Total\nReferrals'} />
           </View>
         </View>
 

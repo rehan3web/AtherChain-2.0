@@ -1,128 +1,85 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from 'expo-router';
-import { claimMining, initialMiningState, miningSnapshot, parseMiningState, savedClaimDays, type MiningState } from './model';
-import { recordActivity } from '@/components/activity/store';
+import { useEffect, useRef, useState } from 'react';
+import { miningApi, userApi } from '@/services/api';
+import { refreshBackendData } from '@/services/refresh';
+import { useBackendResource } from '@/hooks/useBackendResource';
+import { miningSnapshot } from './model';
+import { getAllTransactions } from '@/services/transactions';
 
-const STORAGE_KEY = 'demo-mining-cycle-v1';
-
-/** Device-local simulation. Claim persistence must succeed before showing success. */
+/** The server credits immediately, then controls the next eligible claim. */
 export function useMining() {
-  const [state, setState] = useState<MiningState | null>(null);
+  const resource = useBackendResource(async () => {
+    const [status, profile, statistics, transactions] = await Promise.all([
+      miningApi.status(), userApi.me(), userApi.statistics(), getAllTransactions(),
+    ]);
+    if (!Number.isFinite(Number(status.timeLeft)) || !Number.isFinite(Number(status.currentYield)))
+      throw new Error('The backend returned invalid mining status.');
+    const totalMined = transactions.filter(item => item.type === 'mining' && item.status === 'completed')
+      .reduce((total, item) => total + Number(item.amount), 0);
+    const data = { status, profile, statistics, totalMined, receivedAt: Date.now() };
+    miningSnapshot(data, data.receivedAt);
+    return data;
+  });
   const [now, setNow] = useState(Date.now);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const mounted = useRef(true);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const submitting = useRef(false);
-  const focusedOnce = useRef(false);
-
   useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
-
+  const data = resource.data;
+  const remainingMs = data ? Math.max(0, Number(data.status.timeLeft) * 1000 - (now - data.receivedAt)) : 0;
+  // Reaching zero on the device does not grant permission to claim.
+  // Refresh the authoritative eligibility state instead.
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    async function load() {
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        const saved = raw === null ? initialMiningState(Date.now()) : parseMiningState(raw);
-        if (raw === null) await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-        if (!cancelled) {
-          setState(saved);
-          setNow(Date.now());
-        }
-      } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Could not load your saved demo mining progress.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    void load();
-    return () => { cancelled = true; };
-  }, [attempt]);
-
-  useFocusEffect(useCallback(() => {
-    // Dashboard and Mining read the same saved claims when returning to a tab.
-    if (focusedOnce.current && !submitting.current) setAttempt(value => value + 1);
-    focusedOnce.current = true;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const update = () => setNow(Date.now());
-    const stop = () => {
-      if (timer !== null) clearInterval(timer);
-      timer = null;
-    };
-    const start = () => {
-      stop();
-      update();
-      timer = setInterval(update, 1000);
-    };
-    if (AppState.currentState !== 'background' && AppState.currentState !== 'inactive') start();
-    const listener = AppState.addEventListener('change', (status) => {
-      if (status === 'active') start();
-      else stop();
-    });
-    return () => { stop(); listener.remove(); };
-  }, []));
-
+    if (data && Number(data.status.timeLeft) > 0 && remainingMs === 0 && !resource.loading)
+      void resource.reload();
+  }, [data, remainingMs, resource.loading, resource.reload]);
+  const snapshot = data ? miningSnapshot(data, now) : null;
   const claim = async (): Promise<{ ok: true; amount: number } | { ok: false; message: string } | null> => {
-    if (!state || loading || submitting.current) return null;
+    if (!snapshot?.canClaim || submitting.current || resource.loading) return null;
     submitting.current = true;
     setBusy(true);
-    setError(null);
+    setMutationError(null);
     try {
-      const claimedAt = Date.now();
-      const amount = miningSnapshot(state, claimedAt).pendingReward;
-      const next = claimMining(state, claimedAt);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      recordActivity({
-        id: `claim-${next.claims}-${claimedAt}`,
-        title: 'Mining claimed',
-        timestamp: claimedAt,
-        icon: 'download',
-        value: `+${amount.toLocaleString('en-US', { maximumFractionDigits: 6 })} AT`,
-        positive: true,
-        receipt: {
-          type: 'send', currency: 'AT',
-          data: {
-            amount, recipient: { method: 'username', value: 'AtherChain mining' },
-            note: '', reference: `demo-claim-${next.claims}-${claimedAt}`,
-            createdAt: new Date(claimedAt).toLocaleString('en-US'),
-            demo: true, direction: 'received', transactionTitle: 'Mining claimed', methodLabel: 'Mining reward',
-          },
-        },
-      });
-      if (mounted.current) {
-        setState(next);
-        setNow(Date.now());
-        return { ok: true, amount };
-      }
-      return null;
+      await miningApi.validate();
+      const result = await miningApi.start();
+      if (!Number.isFinite(Number(result.reward))) throw new Error('The backend returned an invalid mining receipt. Refresh before retrying.');
+      refreshBackendData();
+      return { ok: true, amount: Number(result.reward) };
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Could not save your demo claim. Please retry.';
-      if (mounted.current) {
-        setError(message);
-        return { ok: false, message };
-      }
-      return null;
+      const message = cause instanceof Error ? cause.message : 'The mining request failed.';
+      setMutationError(message);
+      return { ok: false, message };
     } finally {
       submitting.current = false;
-      if (mounted.current) setBusy(false);
+      setBusy(false);
     }
   };
-
+  const boost = async () => {
+    if (submitting.current) return;
+    submitting.current = true;
+    setBusy(true);
+    try {
+      const result = await miningApi.claimBoost();
+      refreshBackendData();
+      return result;
+    } finally {
+      submitting.current = false;
+      setBusy(false);
+    }
+  };
   return {
-    loading,
+    loading: resource.loading,
     busy,
-    error,
-    snapshot: state ? miningSnapshot(state, now) : null,
-    claimDays: state ? savedClaimDays(state) : [],
+    error: mutationError ?? resource.error,
+    snapshot,
+    claimDays: data?.statistics.miningCalendar?.map((day: { date: string }) => day.date) ?? [],
+    boosts: Number(data?.status.currentCycleBoosts ?? 0),
+    maxBoosts: Number(data?.status.maxBoosts ?? 0),
+    boostEnabled: data?.status.boostEnabled === true,
+    boost,
     claim,
-    retry: () => { if (!submitting.current) setAttempt((value) => value + 1); },
+    retry: () => { setMutationError(null); void resource.reload(); },
   };
 }

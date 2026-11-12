@@ -6,7 +6,7 @@ import { useReducedMotion } from './primitives';
 import { ConfirmedIcon } from './ConfirmedIcon';
 
 /** Same handle travels, then unfurls leftward into the confirmed capsule. */
-export function SlideConfirm({ onConfirm, operationLabel = 'demo swap', testID = 'wallet-swap-slider', status }: {
+export function SlideConfirm({ onConfirm, operationLabel = 'swap', testID = 'wallet-swap-slider', status }: {
   onConfirm: () => void;
   operationLabel?: string;
   testID?: string;

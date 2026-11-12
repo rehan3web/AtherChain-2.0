@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,12 +16,18 @@ const INK = '#F6F3EE';
 const DIM = 'rgba(246,243,238,0.78)';
 const BASE = '#1D1B19';
 
-export function FaceStep({ index, remaining, onBack }: { index: number; remaining: number; onBack: () => void }) {
+export function FaceStep({ index, remaining, onBack, onCaptured }: { index: number; remaining: number; onBack: () => void; onCaptured: (base64: string) => Promise<void> }) {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [active, setActive] = useState(AppState.currentState === 'active');
   const [camError, setCamError] = useState('');
   const [requesting, setRequesting] = useState(false);
+  const camera = useRef<CameraView>(null);
+  const [ready, setReady] = useState(false);
+  const [countdown, setCountdown] = useState(remaining);
+  const capturing = useRef(false);
+  const captureCallback = useRef(onCaptured);
+  captureCallback.current = onCaptured;
   const i = Math.min(2, Math.max(0, index));
   const prompt = PROMPTS[i];
 
@@ -32,6 +38,23 @@ export function FaceStep({ index, remaining, onBack }: { index: number; remainin
 
   const granted = !!permission?.granted;
   const showCamera = granted && active && !camError;
+  useEffect(() => { setCountdown(remaining); capturing.current = false; }, [index, remaining]);
+  useEffect(() => {
+    if (!showCamera || !ready || capturing.current) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (countdown > 0) { setCountdown(value => value - 1); return; }
+      capturing.current = true;
+      try {
+        const photo = await camera.current?.takePictureAsync({ base64: true, quality: 0.6 });
+        if (!photo?.base64) throw new Error('Could not capture your face. Please return and try again.');
+        if (!cancelled) await captureCallback.current(photo.base64);
+      } catch (cause) {
+        if (!cancelled) setCamError(cause instanceof Error ? cause.message : 'Face capture failed.');
+      }
+    }, 1000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [showCamera, ready, countdown, index]);
 
   const enable = async () => {
     setRequesting(true);
@@ -53,7 +76,7 @@ export function FaceStep({ index, remaining, onBack }: { index: number; remainin
   return (
     <View style={st.root} testID="kyc-face-step">
       {showCamera ? (
-        <CameraView style={StyleSheet.absoluteFill} facing="front" active={active}
+        <CameraView ref={camera} style={StyleSheet.absoluteFill} facing="front" active={active} onCameraReady={() => setReady(true)}
           onMountError={e => setCamError(e?.message ? `Camera unavailable: ${e.message}` : 'Camera unavailable on this device.')} />
       ) : (
         <LinearGradient colors={['#3A3632', BASE]} style={[StyleSheet.absoluteFill, st.center]}>
@@ -90,7 +113,7 @@ export function FaceStep({ index, remaining, onBack }: { index: number; remainin
         <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={st.title}>{prompt.title}</Text>
         <Text style={st.body}>{prompt.body}</Text>
         <Text style={st.count} accessibilityLiveRegion="polite">
-          Step {i + 1} of 3 · {Math.max(0, remaining)}s
+          Step {i + 1} of 3 · {Math.max(0, countdown)}s
         </Text>
         {!!status && (
           <View style={st.status}>

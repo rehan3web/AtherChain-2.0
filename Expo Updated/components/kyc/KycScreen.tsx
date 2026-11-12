@@ -7,7 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { Sheet } from '@/components/wallet/Sheet';
 import {
-  EMPTY_PERSONAL, EMPTY_RESIDENCE, validatePersonal, validateResidence, kycReviewStatus, kycReviewDelay,
+  EMPTY_PERSONAL, EMPTY_RESIDENCE, validatePersonal, validateResidence,
   type DocumentType, type FieldErrors, type Personal, type Photo, type Residence, type KycReviewStatus,
 } from './model';
 import { chooseKycPhoto } from './media';
@@ -16,17 +16,34 @@ import { PhotoSlot } from './PhotoSlot';
 import { FaceStep } from './FaceStep';
 import { CountrySheet, LanguageSheet } from './LanguageSheet';
 import { Heading, PrimaryButton, Progress, s } from './parts';
-
-// Remember only the demo outcome during this app session, never form data/photos.
-let submittedReview: { document: DocumentType | null; submittedAt: number } | null = null;
+import { kycApi } from '@/services/api';
+import { appendImage } from '@/services/uploads';
+import { refreshBackendData } from '@/services/refresh';
+import { useBackendResource } from '@/hooks/useBackendResource';
+import { useToast } from '@/components/toast/ToastProvider';
+import { COUNTRIES } from './countries';
 
 export function KycScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState(submittedReview ? 7 : 0);
-  const [doc, setDoc] = useState<DocumentType | null>(submittedReview?.document ?? null);
-  const [reviewStatus, setReviewStatus] = useState<KycReviewStatus>(() =>
-    submittedReview ? kycReviewStatus(submittedReview.submittedAt, Date.now()) : 'pending');
+  const [step, setStep] = useState(0);
+  const [doc, setDoc] = useState<DocumentType | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<KycReviewStatus>('pending');
+  const { showToast } = useToast();
+  const resource = useBackendResource(kycApi.status);
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (hydrated.current && step !== 7) return;
+    const status = resource.data?.status;
+    if (resource.data) hydrated.current = true;
+    if (['pending', 'rejected', 'approved'].includes(status)) {
+      setReviewStatus(status);
+      setStep(7);
+      const type = resource.data.id_type;
+      if (type) setDoc(type === 'driving_license' ? 'driving' : type === 'national_id' ? 'id' : type);
+    }
+  }, [resource.data]);
+  useEffect(() => { if (resource.error) showToast({ kind: 'error', title: 'Identity verification', body: resource.error }); }, [resource.error, showToast]);
   const [personal, setPersonal] = useState<Personal>(EMPTY_PERSONAL);
   const [residence, setResidence] = useState<Residence>(EMPTY_RESIDENCE);
   const [front, setFront] = useState<Photo | null>(null);
@@ -50,33 +67,39 @@ export function KycScreen() {
     return () => sub.remove();
   }, []);
   useEffect(() => {
-    if (step !== 6 || !foreground) return;
-    const timer = setTimeout(() => {
-      if (!mounted.current) return;
-      if (faceTick >= 5) {
-        submittedReview = { document: doc, submittedAt: Date.now() };
-        setReviewStatus('pending');
-        setPersonal(EMPTY_PERSONAL); setResidence(EMPTY_RESIDENCE);
-        setFront(null); setBack(null);
-        setStep(7);
-      }
-      else setFaceTick(tick => tick + 1);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [step, faceTick, foreground, doc]);
-  useEffect(() => {
-    if (step !== 7 || !foreground || !submittedReview) return;
-    const submittedAt = submittedReview.submittedAt;
-    const now = Date.now();
-    setReviewStatus(kycReviewStatus(submittedAt, now));
-    const delay = kycReviewDelay(submittedAt, now);
-    if (delay === null) return;
-    const timer = setTimeout(() => {
-      if (mounted.current && submittedReview?.submittedAt === submittedAt)
-        setReviewStatus(kycReviewStatus(submittedAt, Date.now()));
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [step, foreground, reviewStatus]);
+    if (step !== 7 || !foreground) return;
+    const timer = setInterval(() => { void resource.reload(); }, 15000);
+    return () => clearInterval(timer);
+  }, [step, foreground, resource.reload]);
+  const submitFace = async (base64: string) => {
+    if (lock.current) return;
+    if (faceTick < 4) { setFaceTick(value => value + 2); return; }
+    lock.current = true; setBusy(true);
+    try {
+      if (!front || !back || !doc || !base64) throw new Error('Capture both document sides and a clear face image.');
+      const form = new FormData();
+      const fields = {
+        full_name: personal.name.trim(), father_name: personal.fatherName.trim(),
+        dob: personal.dob, language: personal.language, address: `${residence.address}, ${residence.state}`,
+        city: residence.city, country: residence.country,
+        country_code: COUNTRIES.find(country => country.name === residence.country)?.code ?? '',
+        id_type: doc === 'driving' ? 'driving_license' : doc === 'id' ? 'national_id' : 'passport',
+        id_number: personal.documentNumber ?? '', id_expiry: personal.idExpiry ?? '',
+        face_scan_frame: `data:image/jpeg;base64,${base64}`,
+        verification_logs: JSON.stringify({ capture: 'camera', promptsCompleted: 3, automaticLivenessVerified: false }),
+      };
+      Object.entries(fields).forEach(([key, value]) => form.append(key, value));
+      await appendImage(form, 'id_front', front);
+      await appendImage(form, 'id_back', back);
+      await kycApi.submit(form);
+      setReviewStatus('pending'); setStep(7);
+      setPersonal(EMPTY_PERSONAL); setResidence(EMPTY_RESIDENCE); setFront(null); setBack(null);
+      refreshBackendData();
+    } catch (cause) {
+      showToast({ kind: 'error', title: 'KYC submission failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+      setFaceTick(0); setStep(5);
+    } finally { lock.current = false; setBusy(false); }
+  };
   const exit = useCallback(() => {
     mounted.current = false;
     if (router.canGoBack()) router.back(); else router.replace('/settings');
@@ -123,7 +146,6 @@ export function KycScreen() {
   };
   const resubmit = () => {
     if (busy || reviewStatus !== 'rejected') return;
-    submittedReview = null;
     setDoc(null); setPersonal(EMPTY_PERSONAL); setResidence(EMPTY_RESIDENCE);
     setFront(null); setBack(null); setFaceTick(0); setReviewStatus('pending');
     setErrors({}); setPhotoErr(''); setLangOpen(false); setCountryOpen(false); setConfirm(false);
@@ -142,7 +164,7 @@ export function KycScreen() {
         const side = step === 4 ? 'front' : 'back';
         return (
           <View>
-            <Heading title={`${side === 'front' ? 'Front' : 'Back'} of your ${docLabel}`} body="Lay it flat with all four corners visible. A sample card or printout works fine for this demo." />
+            <Heading title={`${side === 'front' ? 'Front' : 'Back'} of your ${docLabel}`} body="Use your real, valid ID. Lay it flat with all four corners clearly visible." />
             <PhotoSlot side={side} photo={step === 4 ? front : back} busy={busy} error={photoErr}
               onPick={src => pick(src, step === 4 ? setFront : setBack)}
               onRemove={() => (step === 4 ? setFront(null) : setBack(null))} />
@@ -156,7 +178,7 @@ export function KycScreen() {
   const top = (Platform.OS === 'web' ? 67 : insets.top) + 8;
   const bottom = Math.max(20, insets.bottom, Platform.OS === 'web' ? 34 : 0);
   if (step === 6) {
-    return <FaceStep index={Math.floor(faceTick / 2)} remaining={2 - faceTick % 2} onBack={goBack} />;
+    return <FaceStep index={Math.floor(faceTick / 2)} remaining={2 - faceTick % 2} onBack={goBack} onCaptured={submitFace} />;
   }
   return (
     <View testID="kyc-screen" style={{ flex: 1, backgroundColor: c.miningPage ?? c.background }}>
@@ -189,8 +211,8 @@ export function KycScreen() {
         onSelect={code => { setPersonal(p => ({ ...p, language: code })); setErrors(e => ({ ...e, language: '' })); setLangOpen(false); }} />
       <CountrySheet open={countryOpen} value={residence.country} onClose={() => setCountryOpen(false)}
         onSelect={country => { setResidence(r => ({ ...r, country })); setErrors(e => ({ ...e, country: '' })); setCountryOpen(false); }} />
-      <Sheet open={confirm} title="Leave the demo?" onClose={() => setConfirm(false)} onExited={() => {}}>
-        <Text style={[s.body, { color: c.walletSubtle, marginBottom: 20 }]}>Your entries and photo selections will be cleared from this session. Nothing was uploaded. Original photos and camera cache files remain on your device.</Text>
+      <Sheet open={confirm} title="Leave verification?" onClose={() => setConfirm(false)} onExited={() => {}}>
+        <Text style={[s.body, { color: c.walletSubtle, marginBottom: 20 }]}>Your unsaved entries and photo selections will be cleared. Files already submitted may remain with your application. Original photos remain on your device.</Text>
         <View style={{ gap: 10 }}>
           <PrimaryButton testID="kyc-discard" label="Discard and leave" onPress={() => { setConfirm(false); exit(); }} />
           <PrimaryButton variant="ghost" label="Keep going" onPress={() => setConfirm(false)} />

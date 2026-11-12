@@ -9,18 +9,23 @@ import { Shell, StepTransition } from './Shell';
 import { AuthField, PasswordField, PhoneField, SelectField, noStoreProps } from './SignupFields';
 import { CallingCodeSheet } from './CallingCodeSheet';
 import { SignupOtp } from './SignupOtp';
+import { authApi } from '@/services/api';
+import { useToast } from '@/components/toast/ToastProvider';
+import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
 
 const COPY: Record<Exclude<SignupStep, 'otp'>, [string, string]> = {
-  identifier: ['Create your practice account', 'Start with any made-up email or username. Nothing is sent or saved.'],
+  identifier: ['Create your account', 'Enter your email or username to register with AtherChain.'],
   username: ['Choose a username', '3 to 30 letters, numbers, dots or underscores.'],
-  password: ['Set a password', 'Use 8 to 128 characters. Never a password you use elsewhere.'],
-  name: ['What should we call you?', 'Any name works. It disappears when you leave.'],
+  password: ['Set a password', 'Use a strong, unique password with 8 to 128 characters.'],
+  name: ['What should we call you?', 'Enter the name for your account.'],
   country: ['Where are you based?', 'Pick a country from the list.'],
   referral: ['Got a referral code?', 'Optional. Enter one or skip ahead.'],
-  phone: ['Add a phone number', 'Choose a calling code, then the local number. No SMS is sent.'],
+  phone: ['Add a phone number', 'Choose a calling code, then enter your local number.'],
 };
 
 export function SignupScreen() {
+  const { showToast } = useToast();
+  const registering = useRef(false);
   const [draft, setDraft] = useState<SignupDraft>(EMPTY_SIGNUP);
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
@@ -34,6 +39,7 @@ export function SignupScreen() {
   useEffect(() => () => { otpCancel.current(); }, []);
 
   const goBack = useCallback(() => {
+    if (registering.current) return;
     Keyboard.dismiss(); setErrors({}); setSheet(null);
     if (step === 'otp' && !otpCancel.current()) return;
     if (idx === 0) {
@@ -56,13 +62,29 @@ export function SignupScreen() {
     if (errors[ek]) setErrors(p => { const n = { ...p }; delete n[ek]; return n; });
   };
 
-  const next = (skip = false) => {
+  const next = async (skip = false) => {
+    if (registering.current) return;
     const d = skip ? { ...draft, referral: '' } : draft;
     if (skip) setDraft(d);
     const e = validateSignupStep(step, d);
     setErrors(e);
     if (Object.keys(e).length) return;
     Keyboard.dismiss();
+    if (step === 'phone') {
+      registering.current = true;
+      try {
+        const phone = parsePhoneNumberFromString(d.phone, d.phoneCountry as CountryCode);
+        await authApi.register({
+          firstName: d.firstName.trim(), lastName: d.lastName.trim(),
+          username: d.username.trim(), email: getSignupEmail(d),
+          phone: phone?.number ?? d.phone, password: d.password,
+          referralCode: d.referral.trim() || undefined, country: d.country,
+        });
+      } catch (cause) {
+        showToast({ kind: 'error', title: 'Registration failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+        return;
+      } finally { registering.current = false; }
+    }
     setDir(1); setIdx(i => Math.min(i + 1, SIGNUP_STEPS.length - 1));
   };
 
@@ -105,7 +127,7 @@ export function SignupScreen() {
   };
 
   if (step === 'otp') {
-    return <SignupOtp key="otp" maskedEmail={maskSignupEmail(getSignupEmail(draft))} cancelRef={otpCancel} onDone={clear} onBack={goBack} />;
+    return <SignupOtp key="otp" email={getSignupEmail(draft)} maskedEmail={maskSignupEmail(getSignupEmail(draft))} cancelRef={otpCancel} onDone={clear} onBack={goBack} />;
   }
   return (
     <Shell testID="signup-screen" backID="signup-back" backLabel={idx === 0 ? 'Back to welcome' : 'Previous step'} onBack={goBack}
@@ -118,7 +140,7 @@ export function SignupScreen() {
           <React.Fragment key={step}>
             <Heading eyebrow={`Step ${idx + 1} of ${SIGNUP_STEPS.length}`} title={COPY[step][0]} body={COPY[step][1]} />
             {body()}
-            {idx === 0 && <Notice text="Practice sign up. No real account, SMS or email is created, and nothing you type is stored." />}
+            {idx === 0 && <Notice text="Registration creates a real account. Your details are sent securely to AtherChain for email verification." />}
           </React.Fragment>
       </StepTransition>
       <CountrySheet open={sheet === 'country'} value={draft.country} onClose={() => setSheet(null)}

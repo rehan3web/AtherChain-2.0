@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AtherChain Updated — Backend Migration Report</title>
+<style>
+body{max-width:1000px;margin:36px auto;padding:0 22px;color:#182633;background:#fff;font:16px/1.6 system-ui,sans-serif}h1{font-size:30px;line-height:1.2}h2{margin-top:32px;font-size:22px}h3{font-size:18px}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:12px;border:1px solid #d9e1e8;vertical-align:top}th{background:#eef3f7}code,pre{font:13px/1.6 ui-monospace,monospace}code{background:#f1f4f7;padding:2px 4px;overflow-wrap:anywhere}pre{background:#f5f7fa;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere}.notice{padding:16px;border-left:4px solid #996800;background:#fff6df}.ok{color:#14633b}.muted{color:#516273}li{margin:5px 0}@media print{body{margin:0;max-width:none}details{display:block}table{font-size:11px}}
+</style>
+<h1>AtherChain Updated<br>Backend Migration Report</h1>
+<p class="muted">Scope: existing Updated screens only. Backend and Expo Old were used as read-only references.</p>
+<div class="notice"><strong>Verification is not production certification.</strong> The dedicated migration checks, typecheck, style audit and cross-platform JavaScript exports pass. The entire legacy test suite does not pass. No live financial/security mutations or native-device tests were performed.</div>
+
+<h2>1. Scope and presentation</h2>
+<ul>
+<li>Application-source changes are in <code>AtherChain-2.0/Expo Updated</code>. Backend and Expo Old source files were not modified.</li>
+<li>The managed root preview workflow starts the Updated app on port 5000. This hosting configuration is outside the application source.</li>
+<li>The user explicitly chose <strong>“Preserve updated screens only.”</strong> No password-recovery, account-deletion, vault-management or other old-app-only screens/navigation were added.</li>
+<li>Original theme constants, assets, fonts and style definitions were retained. An AST audit compares every JSX style expression and <code>StyleSheet.create</code> definition against the imported baseline in all 36 changed TSX files.</li>
+<li>Approved exceptions: misleading practice/demo copy was corrected; document number and document expiry inputs were added using existing KYC field styling. Data and status text now reflect the backend. This is not a claim of pixel-for-pixel screenshot equivalence.</li>
+<li>Existing Expo SDK 58 and core dependency versions were retained. Required additions: Expo-compatible <code>expo-crypto</code>, <code>expo-secure-store</code>, and <code>react-native-passkey</code>. The lockfile was updated.</li>
+</ul>
+
+<h2>2. Real integrations</h2>
+<p>Web calls go through a same-origin <code>/api</code> proxy; native calls use the real API endpoint already configured in Expo Old. Optional explicit API configuration is documented in <code>replit.md</code>. Errors do not silently create demo success results.</p>
+<table>
+<thead><tr><th>Existing feature</th><th>Backend endpoints</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Login, registration, email OTP</td><td><code>/auth/login</code>, <code>/auth/register</code>, <code>/auth/verify-email</code>, <code>/auth/resend-otp</code>, <code>/auth/verify-2fa-login</code>, <code>/auth/verify-suspicious-login</code>, <code>/user/me</code></td><td>Real credentials and device ID, actual email verification, two-factor/suspicious-login challenges, blocked-account handling. A local entered preference never grants access. Native tokens use SecureStore.</td></tr>
+<tr><td>Mining and boosts</td><td><code>/mining/status</code>, <code>/mining/validate</code>, <code>/mining/start</code>, <code>/mining/claim-boost</code>, <code>/user/statistics</code>, <code>/transactions</code></td><td>Server eligibility, cooldown, reward, boost limits and account balances. Mining credits are immediate server rewards followed by cooldown, not a fabricated local accrual. UTC claim dates come from server statistics. No unsupported stop operation is simulated.</td></tr>
+<tr><td>Wallet, receive and send</td><td><code>/wallet/stats</code>, <code>/wallet/lookup</code>, <code>/wallet/send</code></td><td>Real address/email/username receiving details and QR. Username sends remove the display @ prefix. Address sends are validated by the send endpoint rather than the email/username-only lookup. Only a real returned reference can produce a send receipt.</td></tr>
+<tr><td>AT → ATH swap</td><td><code>/swap/rate</code>, <code>/swap/execute</code>, <code>/transactions</code></td><td>Server balances and configured rate, fresh preflight rate check, real execution. The final receipt is reconstructed from confirmed server transaction metadata, not an assumed 1:1 result.</td></tr>
+<tr><td>Activity, receipts and statistics</td><td><code>/transactions</code>, <code>/user/statistics</code></td><td>All history pages, real references, amounts, statuses and dates. No local ledger is fabricated. Pending/failed records do not count as completed activity. Real receipts can be copied/shared.</td></tr>
+<tr><td>Referral</td><td><code>/referral/stats</code></td><td>Actual code, invitation link, configured rewards, counts and totals. Copy/share waits for loaded backend data.</td></tr>
+<tr><td>Profile and password</td><td><code>/user/me</code>, <code>/user/profile</code>, <code>/user/password</code></td><td>Real account profile and name update; existing country is preserved. Current password is verified by the backend, not by a practice rule.</td></tr>
+<tr><td>Sessions</td><td><code>/auth/sessions</code>, <code>/auth/sessions/:id</code></td><td>Actual device sessions, current-session identification, remote revocation and logout. Failed revocation is not displayed as successful removal.</td></tr>
+<tr><td>Two-factor security</td><td><code>/user/2fa/generate</code>, <code>/user/2fa/verify</code>, <code>/user/2fa/disable</code></td><td>Actual backend-generated secret and QR, real TOTP verification for enable and disable. Shared demo secrets, canned rejection codes and local completion flags were removed.</td></tr>
+<tr><td>Passkeys and QR login approval</td><td><code>/auth/passkey/login-options</code>, <code>/auth/passkey/login-verify</code>, <code>/user/passkey/register-options</code>, <code>/user/passkey/register-verify</code>, <code>/user/passkey/remove</code>, <code>/auth/qr/approve</code></td><td>Browser/native passkey bridge, server-verified credentials, real listing/removal. Missing creation timestamps remain unknown. Scanned QR sessions require explicit approval; no timer grants login.</td></tr>
+<tr><td>Notifications and native push</td><td><code>/notifications</code>, <code>/notifications/:id/read</code>, <code>/user/push-token</code></td><td>Server inbox/read state; mark-all waits for every result and refreshes even after partial failure. Existing granted native notification permission can register a real Expo token. Permission startup behaviour was preserved.</td></tr>
+<tr><td>News</td><td><code>/news</code></td><td>Actual paginated posts and server image URLs. Static editorial sample posts were removed.</td></tr>
+<tr><td>KYC</td><td><code>/user/kyc/status</code>, <code>/user/kyc/config</code>, <code>/user/kyc/submit</code></td><td>Actual personal/residence/document fields, front/back image uploads and a captured face frame. Mandatory document number and expiry are validated. Review status is fetched from the backend; pending/rejected/approved is never generated by a local timer.</td></tr>
+<tr><td>Support</td><td><code>/support</code>, <code>/support/:id</code>, <code>/support/:id/reply</code></td><td>Actual tickets, IDs, messages, statuses and image uploads with focus/foreground refresh. Closed tickets cannot accept replies. Unsupported attachment combinations fail explicitly rather than being silently dropped.</td></tr>
+</tbody></table>
+
+<h2>3. Demo behaviour replaced</h2>
+<ul>
+<li>Local-only entry, canned banned-login matching, practice OTP/password success and fixed accepted/rejected security codes.</li>
+<li>Simulated mining accrual, local claim balances/history and local boost counts.</li>
+<li>Sample contacts, wallet transactions and editorial news; hardcoded referral values and fake security/session stores.</li>
+<li>Fabricated send references, delayed success before confirmation, assumed 1:1 swap results and nonfunctional receipt share actions.</li>
+<li>Local KYC rejection/approval deadlines and face completion without an actual captured image.</li>
+<li>Seeded support conversations, local-only profile saves and local-only inbox read state.</li>
+</ul>
+<p>Pure formatting, keypad interactions, animation timing, balance masking and appearance preferences remain client-side because they are presentation behaviour, not simulated backend operations. Compatibility names such as <code>useDemoSession</code> are retained where existing navigation imports them; their implementation requires real authentication.</p>
+
+<h2>4. Verification results</h2>
+<table><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody>
+<tr><td><code>pnpm run test:backend</code></td><td class="ok">45 passed, 0 failed. Controlled contract, screen-handler and resource-hook tests. These use isolated test fixtures, not production mutations.</td></tr>
+<tr><td><code>pnpm run typecheck</code></td><td class="ok">Passed.</td></tr>
+<tr><td><code>pnpm run audit:ui</code></td><td class="ok">Passed: original style expressions and StyleSheet definitions preserved in 36 changed TSX files; no theme/assets changes.</td></tr>
+<tr><td>Expo JavaScript export</td><td class="ok">Android, iOS and web exports passed. This does not constitute a signed APK/IPA build or device test.</td></tr>
+<tr><td>Read-only live API checks</td><td class="ok">Health returned HTTP 200 through the preview proxy; unauthenticated wallet access returned HTTP 401.</td></tr>
+<tr><td>Public visual check</td><td>Onboarding and the final public login screen rendered in the preview at phone size. Signed-in screens were not visually verified. Browser logs showed web notification/native-animation support warnings, not an application crash.</td></tr>
+<tr><td><code>node --test scripts/test-*.mjs</code></td><td><strong>193 tests: 130 passed, 63 failed.</strong> Most failures are outdated harnesses rejecting new API dependencies or expectations for retired demo outcomes. The imported “Secondary ink on walletField” palette contrast failure remains. The combined suite is not green and still needs maintenance; failures are not suppressed.</td></tr>
+</tbody></table>
+<p>Dedicated checks cover auth waiting for server tokens, two-factor challenges, no session from practice storage, token storage/expiry/blocking, malformed responses/timeouts, actual request payloads, all-page history, real receipt references, configurable swap rates, server mining eligibility, send/address wiring, uncertain-payment duplicate guards, remote sessions, inbox read state, passkey verification, profile country preservation, KYC required fields and absence of local review timers, and support status/attachment constraints.</p>
+
+<h2>5. Remaining limitations and risks</h2>
+<ol>
+<li><strong>No live mutations were used to verify this migration.</strong> Login/security changes, registration, financial transfers/swaps, KYC submissions and support creation were not executed against real accounts. Signed-in UI and native-device behaviour remain unverified.</li>
+<li><strong>Legacy regression suite is not green.</strong> Outdated demo tests need migration; the existing contrast issue was deliberately not changed because appearance must remain intact. Passing dedicated checks do not prove all possible flows.</li>
+<li><strong>Backend payment guarantees are limited.</strong> It provides neither an idempotency key nor an atomic locked-quote/slippage contract. Client locks prevent duplicate taps and block retries after uncertain results, including reopened sheets. A restart/new session is not proof of rollback: check server history first. Quote metadata after execution is authoritative.</li>
+<li><strong>Unsupported API features remain unsupported.</strong> Saved items and total-strike rewards have no backing endpoints; the UI states this or displays an unavailable marker. No fake totals were inserted. No old-app-only screens were added, per the user's decision.</li>
+<li><strong>Backend constraints were not rewritten.</strong> Transfers are internal ATH transfers only. Support accepts one image per message, not multiple attachments or video. Transfer notes are not persisted by the backend. The public appeal endpoint requires identity fields absent from Updated's public help form, so that form does not fabricate an anonymous submission.</li>
+<li><strong>Upstream fallback behaviour still exists outside scope.</strong> The backend hardcodes WATH balance to zero, contains an incomplete fixed-token swap implementation, and its transaction controller can return an empty successful response on a database error. This app uses the implemented AT→ATH path and cannot distinguish an intentionally empty list from that hidden backend failure.</li>
+<li><strong>Native configuration requires real deployment setup.</strong> The public EAS project ID, native package identifiers and associated domain were carried over from Expo Old. Push delivery still depends on correct platform credentials, permission and a suitable build. Native passkeys need a development/release build, correct signing/domain associations and backend RP/origin configuration; browser passkeys also require an allowed secure origin. Expo Go is not proof of support.</li>
+<li><strong>KYC is not an automated biometric verdict.</strong> Camera prompts capture real images and submit the face frame, but no automated liveness algorithm was added or claimed. Approval/rejection remains the backend review's responsibility.</li>
+<li><strong>Nothing was published.</strong> Preview startup and JavaScript exports were checked; a production deployment was not configured or verified.</li>
+</ol>
+
+<h2>6. Changed files</h2>
+<p>Paths below are relative to <code>AtherChain-2.0/Expo Updated</code>. The managed root workflow configuration is the only preview-hosting configuration outside this list.</p>
+<pre>.agents/memory/MEMORY.md
+.agents/memory/backend-migration-scope.md
+app.json
+app/_layout.tsx
+app/(tabs)/saved.tsx
+components/activity/store.ts
+components/dashboard/DashboardScreen.tsx
+components/help/HelpScreen.tsx
+components/help/TicketChatScreen.tsx
+components/help/tickets.ts
+components/kyc/FaceStep.tsx
+components/kyc/KycScreen.tsx
+components/kyc/Steps.tsx
+components/kyc/model.ts
+components/mining/MiningScreen.tsx
+components/mining/model.ts
+components/mining/useMining.ts
+components/news/NewsScreen.tsx
+components/news/posts.ts
+components/notifications/NotificationsScreen.tsx
+components/notifications/store.ts
+components/onboarding/LoginScreen.tsx
+components/onboarding/SignupOtp.tsx
+components/onboarding/SignupScreen.tsx
+components/onboarding/WelcomeScreen.tsx
+components/onboarding/model.ts
+components/onboarding/session.ts
+components/passkeys/PasskeysScreen.tsx
+components/passkeys/store.ts
+components/password/ChangePasswordScreen.tsx
+components/password/validation.ts
+components/referral/ReferralScreen.tsx
+components/scan/ScanLoginScreen.tsx
+components/sessions/SessionsScreen.tsx
+components/sessions/store.ts
+components/settings/InfoDetail.tsx
+components/settings/SettingsScreen.tsx
+components/settings/profile.ts
+components/statistics/StatisticsScreen.tsx
+components/statistics/model.ts
+components/twofa/DemoQr.tsx
+components/twofa/Steps.tsx
+components/twofa/TwoFaScreen.tsx
+components/twofa/demo.ts
+components/wallet/ActivityList.tsx
+components/wallet/MoneyCard.tsx
+components/wallet/ReceiveSheet.tsx
+components/wallet/SendReceipt.tsx
+components/wallet/SlideConfirm.tsx
+components/wallet/SwapReceipt.tsx
+components/wallet/SwapSheet.tsx
+components/wallet/TransferSheet.tsx
+components/wallet/Wallet.tsx
+components/wallet/defaults.tsx
+components/wallet/swap-model.ts
+components/wallet/transactionReceipt.ts
+components/wallet/types.ts
+hooks/useBackendResource.ts
+hooks/usePushRegistration.ts
+services/api.ts
+services/financialSafety.ts
+services/passkeys.native.ts
+services/passkeys.ts
+services/refresh.ts
+services/transactions.ts
+services/uploads.ts
+server/api-proxy.js
+server/serve.js
+metro.config.js
+package.json
+pnpm-lock.yaml
+scripts/audit-ui-preservation.mjs
+scripts/test-backend-flows.mjs
+scripts/test-backend-migration.mjs
+scripts/test-backend-resources.mjs
+scripts/test-mining.mjs
+replit.md
+BACKEND_MIGRATION_REPORT.html</pre>
+</html>

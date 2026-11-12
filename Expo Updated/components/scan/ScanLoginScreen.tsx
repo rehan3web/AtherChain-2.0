@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, AppState, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Alert, Animated, AppState, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { authApi } from '@/services/api';
+import { useToast } from '@/components/toast/ToastProvider';
 
 const INK = '#F6F3EE';
 const DIM = 'rgba(246,243,238,0.78)';
 const BASE = '#1D1B19';
-const SCAN_MS = 2000;
 const FRAME = 240;
 
 export function ScanLoginScreen() {
@@ -25,6 +26,34 @@ export function ScanLoginScreen() {
   const generation = useRef(0);
   const requested = useRef(false);
   const line = useRef(new Animated.Value(0)).current;
+  const approving = useRef(false);
+  const { showToast } = useToast();
+  const approve = async (raw: string) => {
+    if (approving.current || done || !focused || !appActive) return;
+    let token = raw;
+    try {
+      const data = JSON.parse(raw);
+      token = data.qrToken;
+    } catch { /* The web client also encodes the raw opaque token. */ }
+    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) return;
+    approving.current = true;
+    const confirm = await new Promise<boolean>(resolve => {
+      if (Platform.OS === 'web') resolve(globalThis.confirm('Approve sign-in on the browser displaying this code? Only approve a sign-in you started.'));
+      else Alert.alert('Approve browser sign-in?', 'Only approve this code if you started the sign-in on that browser.', [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Approve', onPress: () => resolve(true) },
+      ], { cancelable: true, onDismiss: () => resolve(false) });
+    });
+    try {
+      if (!confirm) return;
+      const result = await authApi.approveQRLogin(token);
+      if (result.success !== true) throw new Error('The backend did not approve this login.');
+      if (mounted.current) setDone(true);
+      AccessibilityInfo.announceForAccessibility('Browser login approved.');
+    } catch (cause) {
+      showToast({ kind: 'error', title: 'Login approval failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+    } finally { approving.current = false; }
+  };
 
   useEffect(() => {
     mounted.current = true;
@@ -55,7 +84,7 @@ export function ScanLoginScreen() {
       .catch(() => { if (mounted.current) setCamError('Could not request camera access on this device.'); });
   }, [permission, requestPermission, done]);
 
-  // Dummy 2000ms timer: (re)starts whenever focused + foreground and not yet completed.
+  // Animate the existing scan line; only a verified QR approval completes login.
   const running = focused && appActive && !done;
   useEffect(() => {
     if (!running) return;
@@ -69,12 +98,7 @@ export function ScanLoginScreen() {
       ]));
       loop.start();
     }
-    const t = setTimeout(() => {
-      if (!mounted.current || gen !== generation.current) return;
-      setDone(true);
-      AccessibilityInfo.announceForAccessibility('Login Completed. Practice only. No real web session was created.');
-    }, SCAN_MS);
-    return () => { clearTimeout(t); loop?.stop(); if (gen === generation.current) generation.current += 1; };
+    return () => { loop?.stop(); if (gen === generation.current) generation.current += 1; };
   }, [running, reduced, line]);
 
   const leave = () => {
@@ -97,6 +121,7 @@ export function ScanLoginScreen() {
     <View style={st.root} testID="scan-screen">
       {showCamera ? (
         <CameraView testID="scan-camera" style={StyleSheet.absoluteFill} facing="back" active={showCamera}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={({ data }) => { void approve(data); }}
           onMountError={e => setCamError(e?.message ? `Camera unavailable: ${e.message}` : 'Camera unavailable on this device.')} />
       ) : (
         <LinearGradient colors={['#3A3632', BASE]} style={[StyleSheet.absoluteFill, st.center]}>
@@ -132,7 +157,7 @@ export function ScanLoginScreen() {
         {done ? (
           <View testID="scan-success" style={st.block}>
             <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={st.title}>Login Completed</Text>
-            <Text style={st.body}>Practice only. No real web session was created.</Text>
+            <Text style={st.body}>The browser sign-in was approved by AtherChain.</Text>
             <Pressable testID="scan-done" onPress={leave} accessibilityRole="button" accessibilityLabel="Done, return to dashboard"
               style={({ pressed }) => [st.primary, pressed && { transform: [{ scale: 0.98 }] }]}>
               <Text style={st.primaryText}>Done</Text>

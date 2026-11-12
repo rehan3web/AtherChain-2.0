@@ -26,11 +26,11 @@ export function WelcomeScreen() {
         <Animated.View style={rise(a[0])}><IdentityIllustration icon="shield" /></Animated.View>
         <Animated.View style={[rise(a[1]), { marginTop: 12 }]}>
           <Text style={{ fontFamily: 'DMSans_700Bold', fontSize: 15, letterSpacing: 2, color: c.walletSubtle, marginBottom: 10 }}>ATHERCHAIN</Text>
-          <Heading title="Your keys, your practice ground" body="Walk through a wallet from first sign up to first transfer. Every account here is made up and stays on this screen." />
+          <Heading title="Your AtherChain account" body="Create an account or sign in to access your wallet, mining rewards and transactions." />
         </Animated.View>
       </View>
       <Animated.View style={[WRAP, rise(a[2]), { paddingBottom: bottom, gap: 10 }]}>
-        <Notice text="Practice app. No real account, SMS or email is created." />
+        <Notice text="This app connects to the real AtherChain service. Registration and transfers affect your account." />
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
           <View style={{ flex: 1 }}><PrimaryButton testID="welcome-login" variant="ghost" label="Login" onPress={() => router.push('/login')} /></View>
           <View style={{ flex: 1 }}><PrimaryButton testID="welcome-signup" label="Sign up" onPress={() => router.push('/signup')} /></View>

@@ -10,9 +10,10 @@ export function transactionReceipt(transaction: Transaction, locale: string): Se
       ? { ...transaction.recipient }
       : { method: 'username', value: transaction.title },
     note: '',
-    reference: `demo-txn-${transaction.id}`,
+    reference: transaction.reference ?? transaction.id,
     createdAt: Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleString(locale),
-    demo: true,
+    demo: false,
+    status: transaction.status,
     direction: transaction.amount > 0 ? 'received' : 'sent',
     transactionTitle: transaction.title,
     methodLabel: transaction.recipient ? undefined : 'Wallet',

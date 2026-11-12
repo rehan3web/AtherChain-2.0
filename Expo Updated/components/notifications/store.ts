@@ -1,53 +1,36 @@
-import { useSyncExternalStore } from 'react';
+import { notificationApi } from '@/services/api';
+import { useBackendResource } from '@/hooks/useBackendResource';
 
 export type NotificationItem = {
-  id: string;
-  title: string;
-  body: string;
-  createdAt: string;
-  read: boolean;
+  id: string; title: string; body: string; createdAt: string; read: boolean;
   kind: 'info' | 'security' | 'updates';
 };
-
-const SAMPLES: NotificationItem[] = [
-  { id: 'welcome', title: 'Welcome to AtherChain', body: 'Explore your wallet, mining dashboard and account settings in this app preview.', createdAt: '2026-11-09T16:00:00Z', read: false, kind: 'info' },
-  { id: 'security', title: 'Explore security settings', body: 'Try the 2FA, passkey and password practice flows. These previews do not change real account security.', createdAt: '2026-11-08T16:00:00Z', read: false, kind: 'security' },
-  { id: 'support', title: 'Your support space', body: 'Create a practice ticket and keep a conversation history on this device.', createdAt: '2026-11-07T16:00:00Z', read: false, kind: 'info' },
-  { id: 'updates', title: 'Stay up to date', body: 'Visit News from the dashboard to explore the latest sample community stories.', createdAt: '2026-11-06T16:00:00Z', read: true, kind: 'updates' },
-];
-
-/** Local sample inbox, shared across navigation. No push subscription or remote account. */
-export function createNotificationsStore(initial: NotificationItem[] = SAMPLES) {
-  let snapshot = initial.map(item => ({ ...item }));
-  const listeners = new Set<() => void>();
-  const publish = (next: NotificationItem[]) => {
-    snapshot = next;
-    listeners.forEach(listener => listener());
-  };
+export function useNotifications() {
+  const resource = useBackendResource<NotificationItem[]>(async () => {
+    const data = await notificationApi.list();
+    if (!Array.isArray(data)) throw new Error('The backend returned an invalid notification list.');
+    return data.map(item => ({
+      id: String(item.id), title: item.title, body: item.message ?? item.body,
+      createdAt: item.created_at, read: !!item.read,
+      kind: item.category === 'security' ? 'security' : item.category === 'updates' ? 'updates' : 'info',
+    }));
+  });
+  const notifications = resource.data ?? [];
   return {
-    getSnapshot: () => snapshot,
-    subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    markRead: (id: string) => {
-      if (!snapshot.some(item => item.id === id && !item.read)) return false;
-      publish(snapshot.map(item => item.id === id ? { ...item, read: true } : item));
+    notifications, unreadCount: notifications.filter(item => !item.read).length,
+    error: resource.error, loading: resource.loading,
+    markRead: async (id: string) => {
+      await notificationApi.markAsRead(id);
+      await resource.reload();
       return true;
     },
-    markAllRead: () => {
-      const count = snapshot.filter(item => !item.read).length;
-      if (count) publish(snapshot.map(item => item.read ? item : { ...item, read: true }));
-      return count;
+    markAllRead: async () => {
+      const unread = notifications.filter(item => !item.read);
+      const results = await Promise.allSettled(unread.map(item => notificationApi.markAsRead(item.id)));
+      await resource.reload();
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
+      return unread.length;
     },
-  };
-}
-
-const store = createNotificationsStore();
-
-export function useNotifications() {
-  const notifications = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  return {
-    notifications,
-    unreadCount: notifications.filter(item => !item.read).length,
-    markRead: store.markRead,
-    markAllRead: store.markAllRead,
   };
 }

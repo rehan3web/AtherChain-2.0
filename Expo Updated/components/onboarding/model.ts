@@ -28,8 +28,6 @@ const identifierValid = (value: string) => value.includes('@')
   ? emailValid(value)
   : usernameValid(value);
 
-/** Explicit dummy outcome; not a real account ban or authentication check. */
-export const isBannedDemoLogin = (identifier: string) => identifier.trim().toLowerCase() === 'ban@test.com';
 
 export function getSignupEmail(draft: SignupDraft) {
   const identifier = draft.identifier.trim();
@@ -46,12 +44,12 @@ export function validateSignupStep(step: SignupStep, draft: SignupDraft): Record
   if (step === 'identifier' && !identifierValid(draft.identifier.trim()))
     errors.identifier = 'Enter an email address or a username with 3–30 letters, numbers, dots or underscores.';
   if (step === 'identifier' && !draft.identifier.includes('@') && !emailValid(draft.email.trim()))
-    errors.email = 'Enter an email address for the practice email code.';
+    errors.email = 'Enter the email address for your verification code.';
   if (step === 'username' && !usernameValid(draft.username.trim()))
     errors.username = 'Use 3–30 letters, numbers, dots or underscores.';
   if (step === 'password') {
     if (draft.password.trim().length < 8 || draft.password.length > 128)
-      errors.password = 'Use a made-up password with 8–128 characters.';
+      errors.password = 'Use a strong password with 8–128 characters.';
     if (!draft.confirmPassword || draft.confirmPassword !== draft.password)
       errors.confirmPassword = 'Passwords must match.';
   }
@@ -80,6 +78,6 @@ export function validateLogin(identifier: string, password: string): Record<stri
   if (!identifierValid(identifier.trim()))
     errors.identifier = 'Enter an email address or a username with 3–30 letters, numbers, dots or underscores.';
   if (password.trim().length < 8 || password.length > 128)
-    errors.password = 'Enter a made-up password with 8–128 characters.';
+    errors.password = 'Enter your password with 8–128 characters.';
   return errors;
 }

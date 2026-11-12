@@ -12,7 +12,7 @@ import {
   DMSans_700Bold,
   useFonts,
 } from '@expo-google-fonts/dm-sans';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
@@ -20,6 +20,7 @@ import { useColors } from '@/hooks/useColors';
 import { ToastProvider, useToast } from '@/components/toast/ToastProvider';
 import { loadDemoSession, useDemoSession } from '@/components/onboarding/session';
 import { NotificationPermissionGate } from '@/components/notification-permission/NotificationPermissionGate';
+import { usePushRegistration } from '@/hooks/usePushRegistration';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -31,6 +32,10 @@ const REQUIRE_NOTIFICATION_PERMISSION = false;
 function RootLayoutNav() {
   const c = useColors();
   const entry = useDemoSession();
+  usePushRegistration(entry.entered);
+  useEffect(() => {
+    if (entry.ready && entry.blocked && !entry.entered) router.replace('/account-banned');
+  }, [entry.ready, entry.blocked, entry.entered]);
   const { scheme, error } = useTheme();
   const { showToast } = useToast();
   useEffect(() => {

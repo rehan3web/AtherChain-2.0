@@ -61,9 +61,10 @@ export function HelpScreen() {
       showToast({ kind: 'success', title: 'Ticket created', body: `${ticket.id} is now open.` });
       closeForm();
       router.push({ pathname: '/ticket/[id]', params: { id: ticket.id } });
-    } catch {
-      setError('Could not save your ticket. Your draft is kept, please try again.');
-      showToast({ kind: 'error', title: 'Ticket not saved', body: 'Your draft is still here.' });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Could not create your ticket. Your draft is kept.';
+      setError(message);
+      showToast({ kind: 'error', title: 'Ticket not saved', body: message });
     } finally { submitting.current = false; setSaving(false); }
   };
   const visible = filter === 'All' ? tickets : tickets.filter(ticket => ticket.status === filter);

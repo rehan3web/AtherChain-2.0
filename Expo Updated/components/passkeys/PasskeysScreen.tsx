@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -24,7 +24,9 @@ export function PasskeysScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { passkeys, createPasskey, deletePasskey } = usePasskeys();
+  const { passkeys, createPasskey, deletePasskey, error } = usePasskeys();
+  const pending = useRef(false);
+  useEffect(() => { if (error) showToast({ kind: 'error', title: 'Passkeys', body: error }); }, [error, showToast]);
   const [confirm, setConfirm] = useState<Passkey | null>(null);
   const [shown, setShown] = useState<Passkey | null>(null);
 
@@ -32,18 +34,29 @@ export function PasskeysScreen() {
   const ask = (p: Passkey) => { setShown(p); setConfirm(p); };
   const close = () => setConfirm(null);
 
-  const create = () => {
-    const p = createPasskey();
-    showToast({ kind: 'success', title: 'Passkey added', body: `${p.device} was added. Practice only; sign-in is unchanged.` });
+  const create = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      const p = await createPasskey();
+      showToast({ kind: 'success', title: 'Passkey added', body: `${p.device} was registered for sign-in.` });
+    } catch (cause) {
+      showToast({ kind: 'error', title: 'Passkey registration failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+    } finally { pending.current = false; }
   };
 
-  const run = () => {
-    if (!shown || !confirm) return;
-    const ok = deletePasskey(shown.id);
+  const run = async () => {
+    if (!shown || !confirm || pending.current) return;
+    pending.current = true;
+    try {
+    const ok = await deletePasskey(shown.id);
     showToast(ok
       ? { kind: 'success', title: 'Passkey deleted', body: `${shown.device} was removed from this list.` }
       : { kind: 'error', title: 'Passkey not found', body: 'It may already have been deleted.' });
     close();
+    } catch (cause) {
+      showToast({ kind: 'error', title: 'Passkey deletion failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+    } finally { pending.current = false; }
   };
 
   const top = (Platform.OS === 'web' ? 67 : insets.top) + 8;
@@ -66,7 +79,7 @@ export function PasskeysScreen() {
           <View testID="passkeys-onboarding">
             <PasskeyIllustration />
             <Heading title="Passkeys"
-              body="See how a passkey lets you sign in without a password. Practice setup only. No device credential is created and sign-in is unchanged." />
+              body="Register a device passkey to sign in securely without entering your account password." />
             <Row icon="key" title="One key per device" sub="Each device would hold its own private key." />
             <Row icon="unlock" title="No password to type" sub="Your screen lock would confirm it is you." />
             <Row icon="shield" title="Hard to phish" sub="Keys only work on the site that made them." />
@@ -75,7 +88,7 @@ export function PasskeysScreen() {
           <View testID="passkeys-list">
             <Text accessibilityRole="header" style={{ color: c.walletInk, fontFamily: 'DMSans_700Bold', fontSize: 30, letterSpacing: -0.8 }}>Passkeys</Text>
             <Text style={[body, { marginTop: 10 }]}>
-              Practice passkeys for this app. They are not real device credentials and reset when the app restarts.
+              Registered account passkeys. Deleting one prevents future sign-in with that credential.
             </Text>
             <Text style={{ color: c.walletInk, fontFamily: 'DMSans_600SemiBold', fontSize: 19, letterSpacing: -0.3, marginTop: 28, marginBottom: 6 }}>
               {passkeys.length === 1 ? '1 passkey' : `${passkeys.length} passkeys`}
@@ -110,7 +123,7 @@ export function PasskeysScreen() {
 
       <Sheet open={confirm !== null} title="Delete passkey?" onClose={close} onExited={() => setShown(null)}>
         <Text style={[body, { marginBottom: 20 }]}>
-          {shown ? `${shown.device} will be removed from this list. No real device credential or sign-in is affected.` : ''}
+          {shown ? `${shown.device} will no longer be accepted for account sign-in.` : ''}
         </Text>
         <View style={{ gap: 10 }}>
           <PrimaryButton testID="passkeys-confirm" label="Delete passkey" onPress={run} />

@@ -17,6 +17,9 @@ export type Transaction = {
   date: Date | string | number;
   /** Signed, in major units. Negative = money out, positive = money in */
   amount: number;
+  reference?: string;
+  status?: string;
+  currency?: 'AT' | 'ATH';
   /** Retain a demo transfer's original recipient for its history receipt. */
   recipient?: TransferRecipient;
   /** Image URI / any node. Falls back to an arrow icon */

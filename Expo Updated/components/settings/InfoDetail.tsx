@@ -8,7 +8,7 @@ type IconName = React.ComponentProps<typeof Feather>['name'];
 export type InfoContent = { icon: IconName; heading: string; body: string[]; action?: string };
 
 export const INFO: Record<string, InfoContent> = {
-  kyc: { icon: 'shield', heading: 'Verification is not available', body: ['AtherChain is a demo wallet. There is no identity provider connected, so no documents can be submitted or verified.', 'Your profile stays unverified, and nothing you do here changes that.'] },
+  kyc: { icon: 'shield', heading: 'Identity verification', body: ['Submit your identity details and documents through the verification form.', 'Your account status updates after the backend review.'] },
   sessions: { icon: 'monitor', heading: 'No remote sessions', body: ['This app runs entirely on this device. There is no signed-in account, so there are no other devices or sessions to list or revoke.'] },
 };
 

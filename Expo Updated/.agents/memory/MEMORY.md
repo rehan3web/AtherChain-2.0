@@ -1,3 +1,4 @@
+- [Backend migration scope](backend-migration-scope.md) — real integrations replace earlier demo boundaries; preserve presentation, correcting misleading practice notices.
 - [Expo Go connectivity](expo-go-connectivity.md) — a working localhost preview does not prove the public native manifest or bundle is reachable.
 - [Referral presentation](referral-presentation.md) — preserve the user's repeated referral layout requirements during future redesigns.
 - [Font family changes](font-family-changes.md) — change registered family names when replacing fonts; existing Expo font aliases can retain old faces.

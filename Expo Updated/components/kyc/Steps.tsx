@@ -18,7 +18,7 @@ export function IntroStep() {
       <IdentityIllustration />
       <View style={{ alignItems: 'center', marginBottom: 8 }}>
         <Text accessibilityRole="header" style={[s.title, { color: c.walletInk, textAlign: 'center' }]}>Let’s walk through KYC</Text>
-        <Text style={[s.body, { color: c.walletSubtle, textAlign: 'center', marginTop: 8 }]}>A short practice run of identity steps, at your own pace.</Text>
+        <Text style={[s.body, { color: c.walletSubtle, textAlign: 'center', marginTop: 8 }]}>Submit your real identity details, ID photos and face capture securely for review.</Text>
       </View>
       <Row icon="credit-card" title="Photograph an ID document" sub="Front and back, from your photos or camera" />
       <Row icon="user" title="Follow the face instructions" sub="Turn left, turn right, open your mouth" />
@@ -31,7 +31,7 @@ export function DocumentStep({ value, onChange }: { value: DocumentType | null; 
   const c = useColors();
   return (
     <View accessibilityRole="radiogroup">
-      <Heading title="Choose a document" body="Pick the one you’d like to practice with." />
+      <Heading title="Choose a document" body="Choose the valid identity document you will submit." />
       {DOCUMENTS.map(d => (
         <Row key={d.id} testID={`kyc-document-${d.id}`} icon={d.icon}
           leading={<DocumentIcon type={d.id} color={c.walletInk} />}
@@ -55,6 +55,10 @@ export function PersonalStep({ value, errors, onChange, onLanguage }: {
         onChangeText={fatherName => onChange({ ...value, fatherName })} placeholder="e.g. Sample Parent" />
       <Field testID="kyc-dob" label="Date of birth (YYYY-MM-DD)" value={value.dob} error={errors.dob} keyboardType="numbers-and-punctuation"
         maxLength={10} onChangeText={dob => onChange({ ...value, dob })} placeholder="1998-06-15" />
+      <Field testID="kyc-document-number" label="Document number" value={value.documentNumber ?? ''} error={errors.documentNumber}
+        onChangeText={documentNumber => onChange({ ...value, documentNumber })} autoCapitalize="characters" maxLength={80} />
+      <Field testID="kyc-document-expiry" label="Document expiry (YYYY-MM-DD)" value={value.idExpiry ?? ''} error={errors.idExpiry}
+        keyboardType="numbers-and-punctuation" maxLength={10} onChangeText={idExpiry => onChange({ ...value, idExpiry })} placeholder="2030-12-31" />
       <View style={s.field}>
         <Text style={[s.label, { color: c.walletInk }]}>Preferred language</Text>
         <Pressable testID="kyc-language" onPress={onLanguage} accessibilityRole="button"

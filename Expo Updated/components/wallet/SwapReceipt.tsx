@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { copyText } from '@/utils/clipboard';
@@ -36,7 +36,7 @@ export function SwapReceipt({ receipt, onClose }: { receipt: SwapReceiptData; on
           <Pressable onPress={onClose} testID="wallet-receipt-close" accessibilityRole="button" accessibilityLabel="Close receipt" style={styles.icon}>
             <Feather name="x" size={24} color={c.walletInk} />
           </Pressable>
-          <Pressable onPress={() => showToast({ kind: 'info', title: 'Receipt sharing', body: 'Nothing was shared. This feature is a preview.' })} testID="wallet-receipt-share" accessibilityRole="button" accessibilityLabel="Share receipt" accessibilityHint="Demo button; does not share anything" style={styles.icon}>
+          <Pressable onPress={() => { void Share.share({ message: `AtherChain swap\n${receipt.quote.amount} ${receipt.pay.sym} → ${receipt.quote.receiveAmount} ${receipt.receive.sym}\n${receipt.reference}` }).catch(() => showToast({ kind: 'error', title: 'Could not share receipt', body: 'Please retry.' })); }} testID="wallet-receipt-share" accessibilityRole="button" accessibilityLabel="Share receipt" accessibilityHint="Opens the share sheet" style={styles.icon}>
             <Feather name="share" size={22} color={c.walletInk} />
           </Pressable>
         </View>
@@ -78,7 +78,7 @@ export function SwapReceipt({ receipt, onClose }: { receipt: SwapReceiptData; on
               <Divider />
               <ReceiptRow label="Swap fee" value={`${swapUnits(quote.feeAmount ?? quote.amount * SWAP_FEE, pay)} ${pay.sym}`} sub={`${SWAP_FEE_LABEL} · included in quote`} testID="wallet-receipt-fee" />
               <Divider />
-              <ReceiptRow label="Network fee" value="0" sub="Simulated swap · no network transaction" rowTestID="wallet-swap-receipt-footer-last-row" />
+              <ReceiptRow label="Network fee" value="0" sub="Internal account swap · no on-chain transaction" rowTestID="wallet-swap-receipt-footer-last-row" />
             </View>
         </ScrollView>
       </View>

@@ -1,30 +1,16 @@
 export type DocumentType = 'passport' | 'driving' | 'id';
 export type KycReviewStatus = 'pending' | 'rejected' | 'approved';
-export const KYC_REVIEW_INTERVAL_MS = 30_000;
-
-/** Local practice timeline only; never a real verification decision. */
-export function kycReviewStatus(submittedAt: number, now: number): KycReviewStatus {
-  const elapsed = Math.max(0, now - submittedAt);
-  return elapsed < KYC_REVIEW_INTERVAL_MS ? 'pending'
-    : elapsed < KYC_REVIEW_INTERVAL_MS * 2 ? 'rejected' : 'approved';
-}
-
-export function kycReviewDelay(submittedAt: number, now: number): number | null {
-  const elapsed = Math.max(0, now - submittedAt);
-  return elapsed < KYC_REVIEW_INTERVAL_MS ? KYC_REVIEW_INTERVAL_MS - elapsed
-    : elapsed < KYC_REVIEW_INTERVAL_MS * 2 ? KYC_REVIEW_INTERVAL_MS * 2 - elapsed : null;
-}
 
 export const DOCUMENTS = [
   { id: 'passport' as const, label: 'Passport', icon: 'book' as const },
   { id: 'driving' as const, label: 'Driving Licence', icon: 'credit-card' as const },
   { id: 'id' as const, label: 'ID Card', icon: 'user' as const },
 ];
-export type Personal = { name: string; fatherName: string; dob: string; language: string };
+export type Personal = { name: string; fatherName: string; dob: string; language: string; documentNumber?: string; idExpiry?: string };
 export type Residence = { address: string; city: string; state: string; country: string };
 export type Photo = { uri: string; name: string; size?: number };
 export type FieldErrors = Record<string, string>;
-export const EMPTY_PERSONAL: Personal = { name: '', fatherName: '', dob: '', language: '' };
+export const EMPTY_PERSONAL: Personal = { name: '', fatherName: '', dob: '', language: '', documentNumber: '', idExpiry: '' };
 export const EMPTY_RESIDENCE: Residence = { address: '', city: '', state: '', country: '' };
 export const FACE_STEPS = [
   { id: 'left', title: 'Turn your head left', body: 'Gently turn to your left, then capture a photo.' },
@@ -49,6 +35,13 @@ export function validatePersonal(value: Personal, today = new Date()): FieldErro
     }
   }
   if (!value.language) errors.language = 'Choose a language.';
+  if (!value.documentNumber?.trim() || value.documentNumber.trim().length > 80)
+    errors.documentNumber = 'Enter the document number printed on your ID.';
+  if (!value.idExpiry || !/^\d{4}-\d{2}-\d{2}$/.test(value.idExpiry) ||
+      !Number.isFinite(new Date(value.idExpiry).getTime()) ||
+      new Date(value.idExpiry).toISOString().slice(0, 10) !== value.idExpiry ||
+      new Date(`${value.idExpiry}T23:59:59Z`).getTime() < today.getTime())
+    errors.idExpiry = 'Enter a valid, unexpired document expiry date (YYYY-MM-DD).';
   return errors;
 }
 

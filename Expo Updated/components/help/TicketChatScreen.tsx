@@ -91,9 +91,10 @@ export function TicketChatScreen() {
     try {
       await sendTicketMessage(ticket.id, text, files);
       setBody(''); setFiles([]); setAttachOpen(false);
-    } catch {
-      setSendError('Message not sent. Your draft is kept, try again.');
-      showToast({ kind: 'error', title: 'Message not sent', body: 'Your draft is still here.' });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Your message could not be confirmed. Refresh before retrying.';
+      setSendError(message);
+      showToast({ kind: 'error', title: 'Reply not confirmed', body: message });
     } finally { sendingRef.current = false; setSending(false); }
   };
 
@@ -150,7 +151,7 @@ export function TicketChatScreen() {
           contentContainerStyle={styles.thread}>
           <View style={[styles.notice, { backgroundColor: c.walletDemo }]}>
             <Feather name="info" size={14} color={c.walletDemoInk} style={{ marginTop: 2 }} />
-            <Text style={[styles.noticeText, { color: c.walletDemoInk }]}>Practice conversation saved only on this device. Support replies are automated samples, not a real person.</Text>
+            <Text style={[styles.noticeText, { color: c.walletDemoInk }]}>This conversation is stored with AtherChain support. Replies are loaded from your real ticket.</Text>
           </View>
           <View style={[styles.original, { borderColor: c.walletDisabled }]}>
             <Text style={[styles.eyebrow, { color: c.walletSubtle }]}>ORIGINAL REQUEST · {ticket.date}</Text>
@@ -161,7 +162,7 @@ export function TicketChatScreen() {
             const mine = m.author === 'user';
             return (
               <View key={m.id} style={[styles.msgWrap, { alignItems: mine ? 'flex-end' : 'flex-start' }]}>
-                {!mine && <Text style={[styles.meta, { color: c.walletSubtle }]}>Practice support · sample reply</Text>}
+                {!mine && <Text style={[styles.meta, { color: c.walletSubtle }]}>AtherChain support</Text>}
                 <View style={[styles.bubble, mine ? { backgroundColor: c.walletInk, borderBottomRightRadius: 6 } : { backgroundColor: c.walletField, borderBottomLeftRadius: 6 }]}>
                   {!!m.body && <Text style={[styles.body, { color: mine ? c.walletOnInk : c.walletInk }]}>{m.body}</Text>}
                   <AttachmentList files={m.attachments} onOpen={openFile} inverse={mine} />

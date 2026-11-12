@@ -14,9 +14,10 @@ export type SwapReceiptData = {
 };
 export const swapUnits = (value: number, coin: SwapCoin) =>
   value.toLocaleString('en-US', { maximumFractionDigits: coin.dp });
-export function swapQuote(pay: SwapCoin, receive: SwapCoin, amount = 0) {
+export function swapQuote(pay: SwapCoin, receive: SwapCoin, amount = 0, rate = 1) {
   if (pay.sym !== 'AT' || receive.sym !== 'ATH') throw new Error('Only AT to ATH swaps are supported.');
   if (!Number.isFinite(amount) || amount < 0) throw new Error('Enter a valid swap amount.');
-  // Practice conversion only: exact 1:1, with no fees or live price lookup.
-  return { amount, feeAmount: 0, receiveAmount: amount, value: amount, fee: 0, receiveValue: amount };
+  if (!Number.isFinite(rate) || rate <= 0) throw new Error('The backend returned an invalid swap rate.');
+  // The source backend applies its configured rate without an additional fee.
+  return { amount, feeAmount: 0, receiveAmount: amount * rate, value: amount, fee: 0, receiveValue: amount * rate };
 }

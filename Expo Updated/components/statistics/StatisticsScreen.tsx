@@ -49,7 +49,7 @@ export function StatisticsScreen() {
           <Text testID="statistics-total-transfer" style={[s.value, { color: c.walletInk }]}>{totals.transfers}</Text>
         </View>
       </View>
-      <Text style={[s.note, { color: c.walletSubtle }]}>Claim days are saved on this device. Swap and transfer totals count completed actions in this app session.</Text>
+      <Text style={[s.note, { color: c.walletSubtle }]}>Claim days and account activity are loaded from your AtherChain history.</Text>
     </ScrollView>
   </View>;
 }

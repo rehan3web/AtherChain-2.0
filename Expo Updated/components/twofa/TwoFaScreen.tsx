@@ -10,7 +10,11 @@ import { Heading, PrimaryButton, Progress, s } from '@/components/kyc/parts';
 import { CodeCircles, type Phase } from './CodeCircles';
 import { OverviewStep, SetupStep } from './Steps';
 import { Sheet } from '@/components/wallet/Sheet';
-import { CODE_LENGTH, DEMO_REJECT_CODE, isDemoCompleted, isDemoDisabled, markDemoCompleted, markDemoDisabled } from './demo';
+import { CODE_LENGTH } from './demo';
+import { userApi } from '@/services/api';
+import { useBackendResource } from '@/hooks/useBackendResource';
+import { refreshBackendData } from '@/services/refresh';
+import { useToast } from '@/components/toast/ToastProvider';
 
 type Step = 'overview' | 'setup' | 'code' | 'disable';
 
@@ -18,10 +22,16 @@ export function TwoFaScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>('overview');
-  const [completed, setCompleted] = useState(isDemoCompleted);
+  const [completed, setCompleted] = useState(false);
   const [code, setCode] = useState('');
   const [phase, setPhase] = useState<Phase>('entry');
-  const [disabledState, setDisabledState] = useState(isDemoDisabled);
+  const [disabledState, setDisabledState] = useState(false);
+  const [secret, setSecret] = useState('');
+  const pending = useRef(false);
+  const { showToast } = useToast();
+  const resource = useBackendResource(userApi.me);
+  useEffect(() => { if (resource.data) setCompleted(resource.data.twofa_enabled === true); }, [resource.data]);
+  useEffect(() => { if (resource.error) showToast({ kind: 'error', title: 'Two-factor authentication', body: resource.error }); }, [resource.error, showToast]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const active = useRef(true);
   const operation = useRef(0);
@@ -62,13 +72,40 @@ export function TwoFaScreen() {
     return () => sub.remove();
   }, []);
 
+  const verify = async (token: string) => {
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      if (step === 'disable') await userApi.disable2FA(token);
+      else await userApi.enable2FA(token);
+      if (active.current) setPhase('success');
+      refreshBackendData();
+    } catch (cause) {
+      if (active.current) {
+        setPhase('error');
+        showToast({ kind: 'error', title: 'Verification failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+      }
+    } finally { pending.current = false; }
+  };
+  const beginSetup = async () => {
+    if (pending.current || resource.loading || completed || !resource.data) return;
+    pending.current = true;
+    try {
+      const result = await userApi.generate2FA();
+      if (!result.secret) throw new Error('The backend did not return an authenticator setup key.');
+      setSecret(result.secret);
+      setStep('setup');
+    } catch (cause) {
+      showToast({ kind: 'error', title: 'Could not start setup', body: cause instanceof Error ? cause.message : 'Please retry.' });
+    } finally { pending.current = false; }
+  };
   const onKey = (k: string) => {
-    if (phase !== 'entry') return;
+    if (phase !== 'entry' || pending.current) return;
     if (k === BACKSPACE) { setCode(v => v.slice(0, -1)); return; }
     if (!/^\d$/.test(k) || code.length >= CODE_LENGTH) return;
     const next = code + k;
     setCode(next);
-    if (next.length === CODE_LENGTH) setPhase(next === DEMO_REJECT_CODE ? 'error' : 'success');
+    if (next.length === CODE_LENGTH) void verify(next);
   };
 
   const currentOperation = operation.current;
@@ -76,14 +113,13 @@ export function TwoFaScreen() {
     if (!active.current || currentOperation !== operation.current) return;
     if (phase === 'error') { setCode(''); setPhase('entry'); return; }
     if (phase === 'success' && step === 'disable') {
-      markDemoDisabled();
       setCompleted(false); setDisabledState(true);
       setCode(''); setPhase('entry');
       setStep('overview');
       return;
     }
     if (phase === 'success') {
-      markDemoCompleted();
+      setSecret('');
       setDisabledState(false);
       setCompleted(true);
       setCode(''); setPhase('entry');
@@ -109,13 +145,13 @@ export function TwoFaScreen() {
         <ScrollView testID={step === 'disable' ? 'twofa-step-disable-code' : 'twofa-step-code'} style={{ flex: 1 }} showsVerticalScrollIndicator={false}
           contentContainerStyle={[wrap, { flexGrow: 1, paddingTop: 8, paddingBottom: bottom }]}>
           {step === 'disable' ? (
-            <Heading eyebrow="Disable 2FA" title="Enter the email code"
-              body={'Practice email verification. No email is sent. Any six digits pass except 123456. Account security is unchanged.'} />
+            <Heading eyebrow="Disable 2FA" title="Enter the authenticator code"
+              body={'Enter the current six-digit code from your authenticator to disable account protection.'} />
           ) : (
             <>
               <Progress step={2} total={2} />
               <Heading eyebrow="Step 2 of 2" title="Enter the code"
-                body={'Practice setup only. Any six digits pass; try 123456 to see a rejected code.'} />
+                body={'Enter the current six-digit code from your authenticator. The server verifies it before enabling protection.'} />
             </>
           )}
           <View style={{ flex: 1, minHeight: 100, justifyContent: 'center' }}>
@@ -131,13 +167,13 @@ export function TwoFaScreen() {
         <>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[wrap, { paddingTop: 8, paddingBottom: 24, flexGrow: 1 }]}>
             {step === 'setup' && <Progress step={1} total={2} />}
-            {step === 'overview' ? <OverviewStep completed={completed} disabled={disabledState} /> : <SetupStep />}
+            {step === 'overview' ? <OverviewStep completed={completed} disabled={disabledState} /> : <SetupStep secret={secret} uri={`otpauth://totp/${encodeURIComponent(`Ather Network: ${resource.data?.username ?? ''}`)}?secret=${encodeURIComponent(secret)}`} />}
           </ScrollView>
           <View style={[wrap, { paddingBottom: bottom, paddingTop: 8 }]}>
             {step === 'overview' ? (
               completed
                 ? <PrimaryButton testID="twofa-disable" label="Disable 2FA" onPress={() => setConfirmOpen(true)} />
-                : <PrimaryButton testID="twofa-enable" label="Enable 2FA" onPress={() => setStep('setup')} />
+                : <PrimaryButton testID="twofa-enable" label="Enable 2FA" onPress={() => { void beginSetup(); }} />
             ) : (
               <PrimaryButton testID="twofa-next" label="Next" onPress={() => { cancel(); setStep('code'); }} />
             )}
@@ -147,7 +183,7 @@ export function TwoFaScreen() {
 
       <Sheet open={confirmOpen} title="Disable 2FA?" onClose={() => setConfirmOpen(false)} onExited={() => {}}>
         <Text style={[body, { marginBottom: 20 }]}>
-          You will confirm with a six-digit email code. This is practice only; no email is sent and account security is unchanged.
+          Confirm with a six-digit authenticator code. Disabling this protection changes your account security.
         </Text>
         <View style={{ gap: 10 }}>
           <PrimaryButton testID="twofa-disable-confirm" label="Disable 2FA" onPress={() => { setConfirmOpen(false); cancel(); setStep('disable'); }} />

@@ -9,7 +9,6 @@ import { walletApi, ApiError } from '@/services/api';
 import { getAllTransactions, walletTransaction } from '@/services/transactions';
 import { useBackendResource } from '@/hooks/useBackendResource';
 import { refreshBackendData } from '@/services/refresh';
-import { assertPaymentCanProceed, markPaymentUncertain } from '@/services/financialSafety';
 import { useToast } from '@/components/toast/ToastProvider';
 
 export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewStyle>; fullScreen?: boolean } = {}) {
@@ -25,7 +24,6 @@ export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewSt
   }, [resource.error, showToast]);
   const onSend = async (req: TransferRequest): Promise<SendReceiptData> => {
     if (sending.current) throw new Error('A transfer is already in progress.');
-    assertPaymentCanProceed('send');
     if (!resource.data) throw new Error('Your wallet has not loaded. Please retry.');
     if (!Number.isFinite(req.amount) || req.amount <= 0) throw new Error('Enter a valid amount.');
     if (!req.recipient) throw new Error('Enter the recipient email, username, or wallet address.');
@@ -42,6 +40,7 @@ export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewSt
       const result = await walletApi.send(identifier, req.amount);
       refreshBackendData();
       if (!result.hash) throw new Error('The transfer response did not include a reference. Check history before retrying.');
+      if (result.historyPending) showToast({ kind: 'success', title: 'Transfer completed', body: 'Your balance is updated. Transaction history is syncing.' });
       return {
         amount: req.amount, recipient: req.recipient, note: req.note,
         reference: result.hash, createdAt: new Date().toLocaleString('en-US'),
@@ -49,9 +48,8 @@ export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewSt
       };
     } catch (cause) {
       if (submitted && (!(cause instanceof ApiError) || cause.status >= 500 || cause.status < 400)) {
-        markPaymentUncertain('send');
         refreshBackendData();
-        throw new Error('The transfer result is uncertain. Check transaction history before retrying or reloading the app.');
+        throw new Error('The transfer result is unconfirmed. Retry the same recipient and amount to recover its receipt safely.');
       }
       throw cause;
     } finally { sending.current = false; }

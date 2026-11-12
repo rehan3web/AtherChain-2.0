@@ -25,6 +25,8 @@ import marketRoutes from './routes/market';
 import MarketBroadcaster from './services/MarketBroadcaster';
 import SocketService from './services/SocketService';
 import SupportBroadcaster from './services/SupportBroadcaster';
+import { ledgerSchema } from './services/ledgerOperations';
+import { startLedgerHistoryWorker } from './services/ledgerHistory';
 
 const app = express();
 
@@ -53,7 +55,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Idempotency-Key'],
     exposedHeaders: ['Set-Cookie']
 }));
 app.use(maintenanceCheck); // Maintenance Check before routing
@@ -99,6 +101,9 @@ const startServer = async () => {
         // 2. Check Postgres
         const pgRes = await pool.query('SELECT NOW()');
         console.log('✅ Connected to PostgreSQL:', pgRes.rows[0].now);
+        // Additive, isolated schema initialization; never run the legacy setup/reset scripts.
+        await pool.query(ledgerSchema);
+        startLedgerHistoryWorker();
 
         // 3. Check Redis (It connects automatically on instantiation, but we can ping)
         await redis.ping();

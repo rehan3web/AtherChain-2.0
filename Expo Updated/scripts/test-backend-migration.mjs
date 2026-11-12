@@ -3,6 +3,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { createHash, randomUUID } from 'node:crypto';
 
 function load(relative, dependencies, globals = {}) {
   const source = fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
@@ -29,6 +30,11 @@ function apiHarness({ platform = 'web', response, token = 'test-token', timer } 
     setItem: async (key, value) => storage.set(key, value),
     removeItem: async key => storage.delete(key),
   };
+  const crypto = {
+    randomUUID,
+    CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    digestStringAsync: async (_algorithm, value) => createHash('sha256').update(value).digest('hex'),
+  };
   const api = load('../services/api.ts', {
     '@react-native-async-storage/async-storage': asyncStorage,
     'react-native': { Platform: { OS: platform } },
@@ -37,7 +43,11 @@ function apiHarness({ platform = 'web', response, token = 'test-token', timer } 
       setItemAsync: async (key, value) => secure.set(key, value),
       deleteItemAsync: async key => secure.delete(key),
     },
-    'expo-crypto': { randomUUID: () => 'a-real-device-id-for-this-test' },
+    'expo-crypto': crypto,
+    './financialRequests': load('../services/financialRequests.ts', {
+      '@react-native-async-storage/async-storage': asyncStorage, 'expo-crypto': crypto,
+    }, { atob }),
+    './refresh': { refreshBackendData() {} },
   }, {
     process: { env: {} },
     ...(timer ? { setTimeout: timer } : {}),
@@ -46,7 +56,12 @@ function apiHarness({ platform = 'web', response, token = 'test-token', timer } 
       if (options.signal.aborted) {
         const error = new Error('aborted'); error.name = 'AbortError'; throw error;
       }
-      const result = response ? await response(url, options) : {};
+      const validReceipt = url.endsWith('/wallet/send') ? { hash: 'committed-send' }
+        : url.endsWith('/swap/execute') ? { success: true, status: 'completed', hash: 'committed-swap', txId: 'mongo-id',
+          receipt: { fromAmount: 12.5, toAmount: 25, rate: 2, createdAt: new Date().toISOString() } }
+          : url.endsWith('/mining/start') ? { reward: 2, newBalance: 102 }
+            : url.endsWith('/mining/claim-boost') ? { currentCycleBoosts: 1 } : { ok: true };
+      const result = response ? await response(url, options) : { data: validReceipt };
       return {
         ok: (result.status ?? 200) < 400, status: result.status ?? 200,
         text: async () => result.raw ?? JSON.stringify(result.data ?? { ok: true }),
@@ -148,6 +163,8 @@ test('swap and send payloads match the backend contract', async () => {
   await api.swapApi.execute(12.5); await api.walletApi.send('alice', 4);
   assert.deepEqual(JSON.parse(calls[0].body), { amountAT: 12.5, fromToken: 'AT', toToken: 'ATH' });
   assert.deepEqual(JSON.parse(calls[1].body), { recipient: 'alice', amount: 4 });
+  assert.match(calls[0].headers['Idempotency-Key'], /^[\w-]{16,128}$/);
+  assert.match(calls[1].headers['Idempotency-Key'], /^[\w-]{16,128}$/);
 });
 
 test('security, sessions, referrals, profile and inbox use real endpoints', async () => {

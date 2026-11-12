@@ -1,126 +1,90 @@
+import { randomBytes, randomUUID } from 'crypto';
+import { Types } from 'mongoose';
 import { query } from '../db/postgres';
-import { v4 as uuidv4 } from 'uuid';
-import { randomBytes } from 'crypto';
+import { HistoryEvent, LedgerError, runOperation } from './ledgerOperations';
+import { decimal, money } from './ledgerMoney';
 
 export class WalletService {
-
-    static async createWallet() {
-        // Internal ledger identifier; no signing credentials are created.
-        const randomHex = randomBytes(20).toString('hex');
-        const address = `ATH_${randomHex.toUpperCase()}`;
-
-        return {
-            address: address,
-        };
-    }
+    static async createWallet() { return { address: `ATH_${randomBytes(20).toString('hex').toUpperCase()}` }; }
 
     static async getBalance(address: string) {
-        const res = await query('SELECT balance_ath FROM wallets WHERE address = $1', [address]);
-        return res.rows[0]?.balance_ath || '0.00';
+        const result = await query('SELECT balance_ath FROM wallets WHERE address=$1', [address]);
+        return result.rows[0]?.balance_ath || '0.00';
     }
 
-    // Internal Transfer Logic (Database-only)
-    static async transfer(senderId: string | null, recipientIdentifier: string, amount: string, type: string = 'send', symbol: string = 'ATH') {
-        if (symbol !== 'ATH') throw new Error('Only internal ATH transfers are supported.');
-        const pool = (await import('../db/postgres')).default;
-        const Transaction = (await import('../models/Transaction')).default;
-        const client = await pool.connect();
-
-        try {
-            await client.query('BEGIN');
-
-            const amountNum = parseFloat(amount);
-
-            // 1. Resolve Sender
-            let senderAddress = this.getTreasuryAddress();
-            let senderActualId = 'SYSTEM_TREASURY';
-
-            if (senderId) {
-                const senderRes = await client.query('SELECT address, balance_ath FROM wallets WHERE user_id = $1', [senderId]);
-                const sender = senderRes.rows[0];
-                if (!sender) throw new Error('Sender wallet not found');
-                senderAddress = sender.address;
-                senderActualId = senderId;
-
-                // Deduct from Sender
-                const deductRes = await client.query(
-                    `UPDATE wallets SET balance_ath = balance_ath - $1 
-                     WHERE user_id = $2 AND balance_ath >= $3 
-                     RETURNING balance_ath`,
-                    [amountNum, senderId, amountNum]
-                );
-                if (deductRes.rows.length === 0) throw new Error('Insufficient balance');
-            }
-
-            // 2. Resolve Recipient
-            const recipientRes = await client.query(
-                `SELECT u.id, w.address FROM users u JOIN wallets w ON u.id = w.user_id 
-                 WHERE w.address = $1 OR u.email = $1 OR u.username = $1`,
-                [recipientIdentifier]
+    static async transfer(
+        senderId: string | null, recipientIdentifier: string, amount: unknown,
+        type = 'send', symbol = 'ATH', key: string = randomUUID()
+    ) {
+        if (symbol !== 'ATH') throw new LedgerError(400, 'Only internal ATH transfers are supported.');
+        const amountText = decimal(money(amount));
+        const recipient = String(recipientIdentifier).trim();
+        let actorId = senderId;
+        if (!actorId) {
+            const target = await query(
+                `SELECT u.id FROM users u JOIN wallets w ON w.user_id=u.id
+                 WHERE w.address=$1 OR u.email=$1 OR u.username=$1 OR u.id::text=$1`, [recipient]
             );
-            const recipient = recipientRes.rows[0];
-
-            if (!recipient) {
-                // If recipient is treasury address
-                if (recipientIdentifier === this.getTreasuryAddress()) {
-                    // Nothing to update in DB for treasury yet if we don't have a row for it
-                } else {
-                    throw new Error('Recipient not found');
-                }
-            } else {
-                // Add to Recipient
-                await client.query(
-                    `UPDATE wallets SET balance_ath = balance_ath + $1 WHERE user_id = $2`,
-                    [amountNum, recipient.id]
-                );
-            }
-
-            const txHash = `ATH_TX_${uuidv4().replace(/-/g, '').toUpperCase()}`;
-
-            // 3. Log in MongoDB
-            if (senderId) {
-                await Transaction.create({
-                    userId: senderId,
-                    txHash,
-                    type: type,
-                    amount: String(amount),
-                    status: 'completed',
-                    fromAddress: senderAddress,
-                    toAddress: recipient?.address || recipientIdentifier,
-                    fee: '0.00'
-                });
-            }
-
-            if (recipient) {
-                await Transaction.create({
-                    userId: recipient.id,
-                    txHash: `${txHash}_RCV`,
-                    type: senderId ? (type === 'send' ? 'receive' : type) : 'system_credit',
-                    amount: String(amount),
-                    status: 'completed',
-                    fromAddress: senderAddress,
-                    toAddress: recipient.address,
-                    fee: '0.00'
-                });
-            }
-
-            await client.query('COMMIT');
-            return { success: true, hash: txHash };
-
-        } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
+            if (!target.rowCount) throw new LedgerError(404, 'Recipient not found');
+            actorId = target.rows[0].id;
         }
+        const operation = await runOperation(actorId!, `transfer:${type}`, key, { senderId, recipient, amount: amountText }, async (client, id) => {
+            const senderResult = senderId
+                ? await client.query('SELECT is_blocked,is_transfer_enabled,transfer_paused FROM users WHERE id=$1', [senderId])
+                : null;
+            if (type === 'send') {
+                const sender = senderResult?.rows[0];
+                if (!sender || sender.is_blocked || sender.transfer_paused || sender.is_transfer_enabled === false)
+                    throw new LedgerError(403, 'Transfers are disabled for this account');
+                const global = await client.query("SELECT value FROM system_settings WHERE key='transfer'");
+                if (global.rows[0]?.value?.active === false) throw new LedgerError(403, 'Transfers are temporarily disabled');
+            }
+            const treasury = recipient === this.getTreasuryAddress();
+            if (type === 'send' && treasury) throw new LedgerError(400, 'Recipient must be another app account');
+            const target = treasury ? null : await client.query(
+                `SELECT u.id FROM users u JOIN wallets w ON w.user_id=u.id
+                 WHERE w.address=$1 OR u.email=$1 OR u.username=$1 OR u.id::text=$1`, [recipient]
+            );
+            const recipientId: string | undefined = target?.rows[0]?.id;
+            if (!treasury && !recipientId) throw new LedgerError(404, 'Recipient not found');
+            if (senderId === recipientId) throw new LedgerError(400, 'Cannot send to yourself');
+            const ids = [senderId, recipientId].filter(Boolean) as string[];
+            const wallets = await client.query(
+                'SELECT user_id,address FROM wallets WHERE user_id=ANY($1::uuid[]) ORDER BY user_id FOR UPDATE', [ids]
+            );
+            if (wallets.rowCount !== ids.length) throw new LedgerError(409, 'A wallet is unavailable; no funds were transferred');
+            const addresses = new Map<string, string>(wallets.rows.map(row => [row.user_id, row.address]));
+            if (senderId) {
+                const debit = await client.query(
+                    'UPDATE wallets SET balance_ath=balance_ath-$1 WHERE user_id=$2 AND balance_ath >= $1 RETURNING balance_ath',
+                    [amountText, senderId]
+                );
+                if (debit.rowCount !== 1) throw new LedgerError(400, 'Insufficient ATH balance');
+            }
+            if (recipientId) {
+                const credit = await client.query(
+                    'UPDATE wallets SET balance_ath=balance_ath+$1 WHERE user_id=$2 RETURNING balance_ath', [amountText, recipientId]
+                );
+                if (credit.rowCount !== 1) throw new LedgerError(409, 'Recipient wallet is unavailable; no funds were transferred');
+            }
+            const hash = `ATH_TX_${id.replace(/-/g, '').toUpperCase()}`;
+            const base = { amount: amountText, status: 'completed', fee: '0.00', createdAt: new Date().toISOString(),
+                fromAddress: senderId ? addresses.get(senderId) : this.getTreasuryAddress(),
+                toAddress: recipientId ? addresses.get(recipientId) : recipient };
+            const events: HistoryEvent[] = [];
+            if (senderId) events.push({ collection: 'transactions', document: {
+                ...base, _id: new Types.ObjectId().toHexString(), userId: senderId, txHash: hash, type
+            } });
+            if (recipientId) events.push({ collection: 'transactions', document: {
+                ...base, _id: new Types.ObjectId().toHexString(), userId: recipientId, txHash: `${hash}_RCV`,
+                type: senderId ? (type === 'send' ? 'receive' : type) : 'system_credit'
+            } });
+            return { value: { success: true, message: 'Transfer successful', hash, fee: '0.00' }, events };
+        });
+        // Keep the established admin-service result shape.
+        return { ...operation.value, historyPending: operation.historyPending, replayed: operation.replayed };
     }
 
-    static isAddress(address: string) {
-        // Validate internal format: ATH_ followed by 40 hex chars
-        return /^ATH_[0-9A-F]{40}$/i.test(address);
-    }
-
-    static getTreasuryAddress() {
-        return "ATH_TREASURY_SYSTEM_REWARDS_001";
-    }
+    static isAddress(address: string) { return /^ATH_[0-9A-F]{40}$/i.test(address); }
+    static getTreasuryAddress() { return 'ATH_TREASURY_SYSTEM_REWARDS_001'; }
 }

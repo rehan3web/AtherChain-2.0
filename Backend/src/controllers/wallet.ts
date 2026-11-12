@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
-import pool, { query } from '../db/postgres';
-import Transaction from '../models/Transaction';
+import { query } from '../db/postgres';
+import { WalletService } from '../services/wallet';
+import { ledgerResponse, requestKey } from '../services/ledgerOperations';
+import { flushLedgerHistory } from '../services/ledgerHistory';
 
 export const getWalletStats = async (req: Request | any, res: Response) => {
     try {
@@ -48,118 +50,13 @@ export const getWalletStats = async (req: Request | any, res: Response) => {
 };
 
 export const sendATH = async (req: Request | any, res: Response) => {
-    const client = await pool.connect();
     try {
-        const userId = req.user.id;
         const { recipient, amount } = req.body;
-
-        if (!recipient || !amount || parseFloat(amount) <= 0) {
-            return res.status(400).json({ message: 'Invalid recipient or amount' });
-        }
-
-        // 1. Fetch Sender Data
-        const senderRes = await client.query(
-            `SELECT u.id, u.is_blocked, u.is_transfer_enabled, u.transfer_paused, w.address, w.balance_ath 
-             FROM users u 
-             JOIN wallets w ON u.id = w.user_id 
-             WHERE u.id = $1`,
-            [userId]
-        );
-
-        const sender = senderRes.rows[0];
-        if (!sender) return res.status(404).json({ message: 'Sender not found' });
-
-        if (sender.is_blocked) return res.status(403).json({ message: 'Account is blocked' });
-
-        // Global Protocol Check
-        const transferSettings = await client.query('SELECT value FROM system_settings WHERE key = $1', ['transfer']);
-        const isTransferGlobal = transferSettings.rows[0]?.value?.active !== false;
-        if (!isTransferGlobal) {
-            return res.status(403).json({ message: 'Network Protocol Offline: The global transfer system is currently undergoing maintenance.' });
-        }
-
-        if (sender.transfer_paused) {
-            return res.status(403).json({ message: 'Transfer Access Restricted: Your account transfer protocol has been suspended by administration.' });
-        }
-
-        if (!sender.is_transfer_enabled) return res.status(403).json({ message: 'Transfers are disabled for your account' });
-
-        // 2. Resolve Recipient (Internal Only)
-        const recipientRes = await client.query(
-            `SELECT u.id, w.address FROM users u JOIN wallets w ON u.id = w.user_id 
-             WHERE w.address = $1 OR u.email = $1 OR u.username = $1`,
-            [recipient]
-        );
-
-        if (recipientRes.rows.length === 0) {
-            return res.status(400).json({ message: 'You cannot send ATH outside the app (coming soon)' });
-        }
-
-        const recipientUser = recipientRes.rows[0];
-        if (recipientUser.id === userId) {
-            return res.status(400).json({ message: 'Cannot send to yourself' });
-        }
-
-        // 3. Atomic Database Transfer
-        await client.query('BEGIN');
-
-        const deductRes = await client.query(
-            `UPDATE wallets SET balance_ath = balance_ath - $1 
-             WHERE user_id = $2 AND balance_ath >= $3 
-             RETURNING balance_ath`,
-            [amount, userId, amount]
-        );
-
-        if (deductRes.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ message: 'Insufficient ATH balance' });
-        }
-
-        await client.query(
-            `UPDATE wallets SET balance_ath = balance_ath + $1 WHERE user_id = $2`,
-            [amount, recipientUser.id]
-        );
-
-        const txHash = `ATH_TX_${require('uuid').v4().replace(/-/g, '').toUpperCase()}`;
-
-        // 5. Log Transactions to MongoDB
-        await Transaction.create({
-            userId,
-            txHash,
-            type: 'send',
-            amount: String(amount),
-            status: 'completed',
-            fromAddress: sender.address,
-            toAddress: recipientUser.address,
-            fee: '0.00'
-        });
-
-        await Transaction.create({
-            userId: recipientUser.id,
-            txHash: `${txHash}_RCV`,
-            type: 'receive',
-            amount: String(amount),
-            status: 'completed',
-            fromAddress: sender.address,
-            toAddress: recipientUser.address,
-            fee: '0.00'
-        });
-
-        await client.query('COMMIT');
-
-        res.json({
-            message: 'Transfer successful',
-            hash: txHash,
-            fee: '0.00'
-        });
-
-    } catch (error: any) {
-        await client.query('ROLLBACK');
-        console.error('sendATH error:', error);
-        res.status(500).json({ message: 'Transfer failed' });
-    } finally {
-        client.release();
-    }
+        if (typeof recipient !== 'string' || !recipient.trim()) return res.status(400).json({ message: 'Recipient required' });
+        const result = await WalletService.transfer(req.user.id, recipient, amount, 'send', 'ATH', requestKey(req));
+        void flushLedgerHistory().catch(() => {});
+        res.json(result);
+    } catch (error) { ledgerResponse(error, res); }
 };
 
 export const lookupAddress = async (req: Request | any, res: Response) => {

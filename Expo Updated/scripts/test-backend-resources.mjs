@@ -164,15 +164,26 @@ test('two-factor configuration contains no shared fake secret or canned accepted
   assert.equal(module.CODE_LENGTH, 6);
 });
 
-test('uncertain financial results remain blocked after reopening a sheet', () => {
-  let expired;
-  const { module } = harness('../services/financialSafety.ts', {
-    './api': { onSessionExpired: callback => { expired = callback; } },
-  });
-  module.assertPaymentCanProceed('send');
-  module.markPaymentUncertain('send');
-  assert.throws(() => module.assertPaymentCanProceed('send'), /uncertain/);
-  module.assertPaymentCanProceed('swap');
-  expired();
-  module.assertPaymentCanProceed('send');
+test('uncertain financial requests retain their recovery key after reopening a sheet', async () => {
+  const storage = new Map(), keys = [];
+  const dependencies = {
+    '@react-native-async-storage/async-storage': {
+      getItem: async key => storage.get(key) ?? null,
+      setItem: async (key, value) => storage.set(key, value),
+      removeItem: async key => storage.delete(key),
+    },
+    'expo-crypto': {
+      randomUUID: () => 'persistent-operation-key',
+      CryptoDigestAlgorithm: { SHA256: 'SHA256' },
+      digestStringAsync: async () => 'fixture-account-scope',
+    },
+  };
+  const first = harness('../services/financialRequests.ts', dependencies).module;
+  await assert.rejects(first.financialRequest('token', '/wallet/send', { amount: 1 }, async key => {
+    keys.push(key); throw Error('Lost response');
+  }));
+  const reopened = harness('../services/financialRequests.ts', dependencies).module;
+  await reopened.financialRequest('token', '/wallet/send', { amount: 1 }, async key => { keys.push(key); return 'receipt'; });
+  assert.equal(keys[0], keys[1]);
+  assert.equal(storage.size, 0);
 });

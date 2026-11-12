@@ -11,7 +11,7 @@ function proxyApi(req, res, next) {
     return res.end(JSON.stringify({ message: 'Invalid API path.' }));
   }
   const headers = {};
-  for (const key of ['authorization', 'content-type', 'accept', 'user-agent']) {
+  for (const key of ['authorization', 'content-type', 'accept', 'user-agent', 'idempotency-key']) {
     if (req.headers[key]) headers[key] = req.headers[key];
   }
   const transport = url.protocol === 'https:' ? https : http;

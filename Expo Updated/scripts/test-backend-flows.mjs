@@ -103,7 +103,6 @@ test('a two-factor challenge cannot be bypassed by a successful password respons
 function walletHarness(send) {
   const react = reactHarness();
   const calls = [], refreshes = [];
-  let uncertain = false;
   class BackendError extends Error {
     constructor(message, status = 400) { super(message); this.status = status; }
   }
@@ -121,10 +120,6 @@ function walletHarness(send) {
       error: null,
     }) },
     '@/services/refresh': { refreshBackendData: () => refreshes.push(true) },
-    '@/services/financialSafety': {
-      assertPaymentCanProceed: () => { if (uncertain) throw new Error('The previous transfer is uncertain. Check history.'); },
-      markPaymentUncertain: () => { uncertain = true; },
-    },
     '@/components/toast/ToastProvider': { useToast: () => ({ showToast() {} }) },
   });
   return { tree: react.render(() => Wallet()), calls, refreshes };
@@ -156,16 +151,16 @@ test('address sends bypass the email-only lookup but still require backend confi
 
 test('a missing transfer reference is rejected instead of replaced by a random demo hash', async () => {
   const app = walletHarness(async () => ({}));
-  await assert.rejects(app.tree.props.onSend(transfer), /uncertain/);
-  await assert.rejects(app.tree.props.onSend(transfer), /previous transfer/);
-  assert.equal(app.calls.filter(call => call[0] === 'send').length, 1);
+  await assert.rejects(app.tree.props.onSend(transfer), /unconfirmed/);
+  assert.equal(app.tree.props.balance, 100);
 });
 
-test('a network failure blocks a second payment until the user checks history', async () => {
+test('a network failure offers same-details recovery through the idempotent API', async () => {
   const app = walletHarness(async () => { throw new Error('Network disconnected'); });
-  await assert.rejects(app.tree.props.onSend(transfer), /uncertain/);
-  await assert.rejects(app.tree.props.onSend(transfer), /Check history/);
-  assert.equal(app.calls.filter(call => call[0] === 'send').length, 1);
+  await assert.rejects(app.tree.props.onSend(transfer), /same recipient and amount/);
+  await assert.rejects(app.tree.props.onSend(transfer), /same recipient and amount/);
+  assert.equal(app.calls.filter(call => call[0] === 'send').length, 2);
+  assert.equal(app.tree.props.balance, 100);
 });
 
 test('saved practice preferences do not grant an authenticated session', async () => {

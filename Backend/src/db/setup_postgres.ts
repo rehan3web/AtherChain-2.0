@@ -1,4 +1,5 @@
 import pool from './postgres';
+import { ledgerSchema } from '../services/ledgerOperations';
 
 const setupDb = async () => {
     const client = await pool.connect();
@@ -536,6 +537,7 @@ const setupDb = async () => {
         await client.query(`CREATE INDEX IF NOT EXISTS idx_account_deletion_status ON account_deletion_requests(status)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_account_deletion_auth_token_hash ON account_deletion_requests(auth_token_hash)`);
 
+        await client.query(ledgerSchema);
         await client.query('COMMIT');
         console.log('✅✅ All Database Tables & Migrations setup successfully!');
 

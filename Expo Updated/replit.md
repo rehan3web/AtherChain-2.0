@@ -23,7 +23,7 @@ This is the standalone Expo SDK 58 / React Native app. Preserve its existing scr
 - Cross-platform JavaScript export: `CI=1 pnpm exec expo export --platform all --output-dir generated-artifacts/verification-build`
 - Outputs in `generated-artifacts/` are excluded from Git and the target's deployment ignore file.
 
-The dedicated app checks now include 46 tests, including internal ledger address validation. During the initial migration, the style audit preserved original style expressions in 36 changed TSX files and Android/iOS/web JavaScript exports passed. Native-device operation remains unverified. The last combined legacy run before backend cleanup was **not green**: 130 of 193 tests passed; 63 failed, primarily because old harnesses reject new API imports or assert retired demo outcomes. One imported palette contrast failure remained unchanged. Do not hide or describe those failures as passing.
+The dedicated app checks now include 55 tests, including persisted payment-key recovery and actual API-proxy header forwarding. The backend has 37 isolated ledger/HTTP/failure-injection checks. During the initial migration, the style audit preserved original style expressions in 36 changed TSX files and Android/iOS/web JavaScript exports passed. Native-device operation remains unverified. The last combined legacy run before backend cleanup was **not green**: 130 of 193 tests passed; 63 failed, primarily because old harnesses reject new API imports or assert retired demo outcomes. One imported palette contrast failure remained unchanged. Do not hide or describe those failures as passing.
 
 ## Scope and limitations
 
@@ -33,7 +33,7 @@ Native app identifiers, associated domain and public EAS project ID were carried
 
 Backend support accepts one image per ticket/reply, not videos or multiple attachments. KYC uses actual document uploads and prompted camera frames; review results come only from the backend, not timers. No automated biometric liveness verdict is claimed. Missing backend features such as saved items and total-strike rewards are shown as unsupported/unavailable rather than populated with fake values.
 
-The backend does not provide payment idempotency or an atomic locked-quote contract. After an uncertain financial response, check history before restarting or submitting again. These upstream limitations cannot be fixed by modifying this app alone.
+The backend now supports persisted idempotency keys for user send/swap/mining/boost operations. The app retains a pending key across uncertain responses and app restarts; retry the same details, never replace an uncertain key to force another debit. PostgreSQL commits balances and recovery requests together, then a worker delivers transaction/mining logs to MongoDB idempotently. Swap receipts no longer depend on immediate history availability. See `../Backend/LEDGER_RELIABILITY.md`. Rates are still not reserved atomically between review and execution.
 
 The backend is now centralized-only: Solidity/artifacts, chain dependencies/configuration, Web3 vaults, wrapped-token swap stubs, bridge-fee claims and gas-estimation endpoints were removed. The app no longer exposes unused bridge-claim API helpers. See `../Backend/BLOCKCHAIN_REMOVAL.md` for supported endpoints and verification commands. No live database tables, records, balances or saved secrets were deleted.
 

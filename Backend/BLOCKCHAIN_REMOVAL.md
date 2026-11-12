@@ -31,3 +31,5 @@ pnpm run test:centralized
 The new tests use isolated database/cache fixtures and a synthetic environment. They do not mutate connected user databases, trigger transfers or send notifications. The old `src/test/verify-centralized.ts` script mutates configured databases and is not used for this verification.
 
 After code/package changes, restart the existing backend workflow. The app's same-origin API proxy does not need a new endpoint or UI redesign. Changes here are local until explicitly pushed to GitHub.
+
+Subsequent financial reliability fixes are documented in `LEDGER_RELIABILITY.md`: pinned database transactions, checked credits, persisted cooldowns, safe retry keys and durable delivery into the existing MongoDB history store.

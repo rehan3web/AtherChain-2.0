@@ -83,7 +83,7 @@ async function verifyCentralizedFlow() {
 
         const swapRate = 2.0;
         // Swap 20 AT -> 40 ATH
-        await SwapService.swapATtoATH(user1Id, 20.0, swapRate);
+        await SwapService.swapATtoATH(user1Id, 20.0, 'legacy-verification-swap-key');
 
         const finalAt = await query('SELECT at_balance FROM users WHERE id = $1::UUID', [user1Id]);
         const finalAth = await WalletService.getBalance(wallet1.address);

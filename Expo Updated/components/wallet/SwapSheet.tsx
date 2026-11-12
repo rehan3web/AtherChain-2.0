@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { swapApi, userApi, transactionApi, ApiError } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
 import { refreshBackendData } from '@/services/refresh';
-import { assertPaymentCanProceed, markPaymentUncertain } from '@/services/financialSafety';
 import { Animated, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -77,11 +76,6 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
   };
   const confirm = async () => {
     if (confirming.current) return;
-    try { assertPaymentCanProceed('swap'); }
-    catch (cause) {
-      showToast({ kind: 'error', title: 'Check swap history', body: cause instanceof Error ? cause.message : 'Check history before retrying.' });
-      return;
-    }
     confirming.current = true;
     onBusyChange?.(true);
     setSwapStatus('pending');
@@ -98,18 +92,23 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
       if (result.success !== true || result.status !== 'completed' || !result.hash)
         throw new Error('The swap was not confirmed. Check transaction history before retrying.');
       accepted = true;
-      const history = await transactionApi.list(1, 20, result.hash);
-      const transaction = history.data?.find((item: any) => item.txHash === result.hash && item.status === 'completed');
-      if (!transaction?.metadata) throw new Error('The swap was accepted, but its final receipt is not available yet. Check history before retrying.');
+      let receipt = result.receipt;
+      if (!receipt) {
+        const history = await transactionApi.list(1, 20, result.hash);
+        const transaction = history.data?.find((item: any) => item.txHash === result.hash && item.status === 'completed');
+        if (transaction?.metadata) receipt = { ...transaction.metadata, createdAt: transaction.timestamp };
+      }
+      if (!receipt || !Number.isFinite(Number(receipt.fromAmount)) || !Number.isFinite(Number(receipt.rate)))
+        throw new Error('The final receipt could not be verified. Retry the same amount to recover it safely.');
       completedReceipt.current = {
-        ...agreed, reference: result.hash, createdAt: new Date(transaction.timestamp).toLocaleString('en-US'),
-        quote: swapQuote(pay, receive, Number(transaction.metadata.fromAmount), Number(transaction.metadata.rate)),
+        ...agreed, reference: result.hash, createdAt: new Date(receipt.createdAt).toLocaleString('en-US'),
+        quote: swapQuote(pay, receive, Number(receipt.fromAmount), Number(receipt.rate)),
       };
       setSwapStatus('confirmed');
       setDone(true);
+      if (result.historyPending) showToast({ kind: 'success', title: 'Swap completed', body: 'Your receipt is saved. Transaction history is syncing.' });
     } catch (cause) {
       if (accepted || (submitted && (!(cause instanceof ApiError) || cause.status >= 500 || cause.status < 400))) {
-        markPaymentUncertain('swap');
         refreshBackendData();
       }
       showToast({ kind: 'error', title: 'Swap failed', body: cause instanceof Error ? cause.message : 'Check history before retrying.' });

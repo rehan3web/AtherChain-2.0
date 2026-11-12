@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
+import { financialRequest, clearEligibleMiningRequest } from './financialRequests';
+import { refreshBackendData } from './refresh';
 
 const TOKEN_KEY = 'ather_token';
 const DEVICE_KEY = 'ather_device_id';
@@ -49,7 +51,7 @@ export function getApiBaseUrl() {
 }
 
 export async function request<T = any>(path: string, options: {
-  method?: string; body?: unknown; public?: boolean;
+  method?: string; body?: unknown; public?: boolean; headers?: Record<string, string>;
 } = {}): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
@@ -63,6 +65,7 @@ export async function request<T = any>(path: string, options: {
         Accept: 'application/json',
         ...(!multipart && options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
       },
       body: options.body === undefined ? undefined : multipart ? options.body as FormData : JSON.stringify(options.body),
       signal: controller.signal,
@@ -87,6 +90,31 @@ export async function request<T = any>(path: string, options: {
 
 const post = (path: string, body?: unknown, isPublic = false) =>
   request(path, { method: 'POST', body, public: isPublic });
+
+async function financialPost(path: string, body: unknown = {}) {
+  const token = await getToken();
+  if (!token) throw new ApiError('Please sign in to continue.', 401, {});
+  return financialRequest(token, path, body, async key => {
+    const result = await request(path, { method: 'POST', body, headers: { 'Idempotency-Key': key } });
+    const valid = path === '/wallet/send' ? typeof result.hash === 'string' && !!result.hash
+      : path === '/swap/execute' ? result.success === true && result.status === 'completed'
+        && typeof result.hash === 'string' && !!result.hash && typeof result.txId === 'string' && !!result.txId
+        && Number.isFinite(result.receipt?.fromAmount) && result.receipt.fromAmount > 0
+        && Number.isFinite(result.receipt?.rate) && result.receipt.rate > 0
+        && Number.isFinite(result.receipt?.toAmount) && result.receipt.toAmount > 0
+        && Number.isFinite(Date.parse(result.receipt?.createdAt))
+        : path === '/mining/start' ? Number.isFinite(result.reward) && Number.isFinite(result.newBalance)
+          : Number.isInteger(result.currentCycleBoosts);
+    if (!valid) throw new ApiError('The receipt could not be verified. Retry the same details to recover it.', 200, result);
+    if (result.historyPending) {
+      for (const delay of [2000, 6000, 15000]) {
+        const timer: any = setTimeout(refreshBackendData, delay);
+        timer?.unref?.();
+      }
+    }
+    return result;
+  });
+}
 
 export const authApi = {
   login: (emailOrUsername: string, password: string) => post('/auth/login', { emailOrUsername, password }, true),
@@ -127,19 +155,24 @@ export const userApi = {
 };
 export const miningApi = {
   status: () => request('/mining/status'),
-  start: () => post('/mining/start'),
-  validate: () => post('/mining/validate'),
-  claimBoost: () => post('/mining/claim-boost'),
+  start: () => financialPost('/mining/start'),
+  validate: async () => {
+    const result = await post('/mining/validate');
+    const token = await getToken();
+    if (token) await clearEligibleMiningRequest(token);
+    return result;
+  },
+  claimBoost: () => financialPost('/mining/claim-boost'),
 };
 export const walletApi = {
   stats: () => request('/wallet/stats'),
-  send: (recipient: string, amount: number) => post('/wallet/send', { recipient, amount }),
+  send: (recipient: string, amount: number) => financialPost('/wallet/send', { recipient, amount }),
   lookup: (identifier: string) => post('/wallet/lookup', { identifier }),
 };
 export const swapApi = {
   rate: () => request('/swap/rate'),
   status: () => request('/swap/status'),
-  execute: (amountAT: number) => post('/swap/execute', { amountAT, fromToken: 'AT', toToken: 'ATH' }),
+  execute: (amountAT: number) => financialPost('/swap/execute', { amountAT, fromToken: 'AT', toToken: 'ATH' }),
 };
 export const transactionApi = {
   list: (page = 1, limit = 20, search = '') =>

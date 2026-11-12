@@ -1,13 +1,10 @@
 import { Request, Response } from 'express';
-import pool, { query } from '../db/postgres';
 import Transaction from '../models/Transaction';
 import { SettingsModel } from '../models/settings';
 import { UserModel } from '../models/user';
 import { SwapService } from '../services/swapService';
 import { cache } from '../services/cache';
 import redis from '../db/redis';
-
-// Removed blockchain provider
 
 export const getSwapRate = async (req: Request, res: Response) => {
     try {
@@ -36,15 +33,14 @@ export const executeSwap = async (req: Request | any, res: Response) => {
         }
 
         try {
-            const { amountAT, fromToken = 'AT', toToken = 'ATH' } = req.body;
+            const { amountAT: rawAmount, fromToken = 'AT', toToken = 'ATH' } = req.body;
+            const amountAT = typeof rawAmount === 'number' || typeof rawAmount === 'string' ? Number(rawAmount) : NaN;
 
-            if (!amountAT || amountAT <= 0) {
+            if (!Number.isFinite(amountAT) || amountAT <= 0) {
                 return res.status(400).json({ message: 'Invalid amount' });
             }
 
-            const isFixedPair = (fromToken === 'ATH' && toToken === 'WATH') || (fromToken === 'WATH' && toToken === 'ATH');
-
-            if (!isFixedPair && (fromToken !== 'AT' || toToken !== 'ATH')) {
+            if (fromToken !== 'AT' || toToken !== 'ATH') {
                 return res.status(400).json({ message: 'Invalid swap pair' });
             }
 
@@ -60,16 +56,11 @@ export const executeSwap = async (req: Request | any, res: Response) => {
 
             const isCooldownEnabled = settings.cooldown_enabled !== false; // Default to true if not set
 
-            const isEnabledOnChain = await SwapService.isGlobalSwapEnabled();
-            if (!isEnabledOnChain) {
-                return res.status(400).json({ message: 'Contract swap is globally disabled' });
-            }
-
             // 2. Fetch User & Check Cooldown (Cached Check)
             const cacheKey = `user_cooldown:${userId}`;
             const now = new Date();
 
-            if (!isFixedPair && isCooldownEnabled) {
+            if (isCooldownEnabled) {
                 const cachedCooldown = await cache.get(cacheKey);
                 if (cachedCooldown && now < new Date(cachedCooldown)) {
                     const nextSwapAt = new Date(cachedCooldown);
@@ -101,7 +92,7 @@ export const executeSwap = async (req: Request | any, res: Response) => {
 
             // Cooldown check (Only for AT -> ATH)
             const nextSwapAt = user.next_swap_at ? new Date(user.next_swap_at) : null;
-            if (!isFixedPair && isCooldownEnabled && nextSwapAt && now < nextSwapAt) {
+            if (isCooldownEnabled && nextSwapAt && now < nextSwapAt) {
                 await cache.set(cacheKey, nextSwapAt.toISOString(), 300); // Sync cache for 5m
                 const diff = nextSwapAt.getTime() - now.getTime();
                 const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -114,28 +105,19 @@ export const executeSwap = async (req: Request | any, res: Response) => {
             }
 
             // 3. Balance Checks
-            if (fromToken === 'AT') {
-                if (parseFloat(user.at_balance) < amountAT) {
-                    return res.status(400).json({ message: 'Insufficient AT Balance' });
-                }
-            } else {
-                const balanceATH = await SwapService.getATHBalance(user.address!);
-                if (parseFloat(balanceATH) < amountAT) {
-                    return res.status(400).json({ message: `Insufficient ${fromToken} Balance` });
-                }
+            if (parseFloat(user.at_balance) < amountAT) {
+                return res.status(400).json({ message: 'Insufficient AT Balance' });
             }
 
             // 4. Execute Internal Swap
-            const rate = isFixedPair ? 1 : settings.rate;
+            const rate = Number(settings.rate);
+            if (!Number.isFinite(rate) || rate <= 0) {
+                return res.status(503).json({ message: 'Invalid swap rate configuration' });
+            }
             const amountATH = amountAT * rate;
 
             try {
-                if (fromToken === 'AT') {
-                    await SwapService.swapATtoATH(userId, amountAT, rate);
-                } else {
-                    // Handle ATH <-> WATH if needed, otherwise skip for now
-                    await SwapService.swapFixed(userId, amountAT, fromToken, toToken);
-                }
+                await SwapService.swapATtoATH(userId, amountAT, rate);
 
                 const txHash = `ATH_SWAP_${require('uuid').v4().replace(/-/g, '').toUpperCase()}`;
 

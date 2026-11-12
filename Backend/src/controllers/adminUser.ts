@@ -226,10 +226,11 @@ export const deleteUser = async (req: Request, res: Response) => {
 
 export const adminSendAssets = async (req: Request, res: Response) => {
     const { userId } = req.params; // Source User
-    const { recipient, amount, asset } = req.body;
+    const { recipient, amount, asset = 'ATH' } = req.body;
     const adminId = (req as any).user.id;
 
     try {
+        if (asset !== 'ATH') return res.status(400).json({ message: 'Only internal ATH transfers are supported.' });
         const txResult = await WalletService.transfer(String(userId), String(recipient), amount, 'admin_transfer', asset);
 
         await AuditService.log(String(adminId), String(userId), 'ADMIN_TRANSFER_FROM_USER', {
@@ -300,15 +301,6 @@ export const getUserTransactions = async (req: Request, res: Response) => {
     } catch (error) {
         res.status(500).json({ message: 'Error fetching transactions' });
     }
-};
-
-export const estimateAdminSendGas = async (req: Request, res: Response) => {
-    // In a centralized system, there are no real "gas fees". 
-    // We return a mock zero fee to satisfy existing frontend logic.
-    res.json({
-        estimatedFee: "0",
-        toAddress: req.body.recipient // Return same to indicate it's valid
-    });
 };
 
 export const editUser = async (req: Request, res: Response) => {

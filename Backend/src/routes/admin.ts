@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { adminAuth } from '../middlewares/admin';
 import { adminLogin } from '../controllers/adminAuth';
-import { listUsers, updateUserStatus, updateUserBalance, getUserDetails, deleteUser, forceLogoutUser, editUser, resetUserPassword, getUserTransactions, recreateUserWallet, adminSendAssets, estimateAdminSendGas } from '../controllers/adminUser';
+import { listUsers, updateUserStatus, updateUserBalance, getUserDetails, deleteUser, forceLogoutUser, editUser, resetUserPassword, getUserTransactions, recreateUserWallet, adminSendAssets } from '../controllers/adminUser';
 import { listKycRequests, getKycDetails, approveKyc, rejectKyc, serveKycDocument, serveFaceScan } from '../controllers/adminKyc';
 import { getKycRules, updateKycRules } from '../controllers/kyc';
 import { getSettings, updateSettings, updateBoostSettings } from '../controllers/adminSettings';
@@ -27,7 +27,6 @@ router.post('/users/:userId/reset-password', adminAuth, resetUserPassword);
 router.get('/users/:userId/transactions', adminAuth, getUserTransactions);
 router.post('/users/:userId/wallet/recreate', adminAuth, recreateUserWallet);
 router.post('/users/:userId/wallet/send', adminAuth, adminSendAssets);
-router.post('/users/:userId/wallet/estimate-gas', adminAuth, estimateAdminSendGas);
 
 // KYC
 router.get('/kyc', adminAuth, listKycRequests);

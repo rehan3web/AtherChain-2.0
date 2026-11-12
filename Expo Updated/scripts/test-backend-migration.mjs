@@ -194,3 +194,11 @@ test('quotes apply the actual configurable rate rather than assuming 1:1', () =>
   assert.equal(quote.receiveAmount, 3.7);
   assert.throws(() => model.swapQuote(...model.SWAP_COINS, 10, -1), /invalid swap rate/);
 });
+
+test('internal ATH ledger addresses can be entered and copied without case changes', () => {
+  const recipient = load('../components/wallet/recipient.ts', {});
+  const address = 'ATH_' + 'A1'.repeat(20);
+  assert.equal(recipient.recipientError('address', address), null);
+  assert.equal(recipient.normalizeRecipient('address', ` ${address} `).value, address);
+  assert.ok(recipient.recipientError('address', 'ATH_INVALID'));
+});

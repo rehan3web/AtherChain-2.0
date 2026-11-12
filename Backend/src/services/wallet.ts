@@ -1,20 +1,16 @@
 import { query } from '../db/postgres';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 
 export class WalletService {
 
     static async createWallet() {
-        // Generate a random internal wallet address (mimicking blockchain feel)
-        const randomHex = Math.random().toString(16).substring(2, 12) +
-            Math.random().toString(16).substring(2, 12) +
-            Math.random().toString(16).substring(2, 12) +
-            Math.random().toString(16).substring(2, 12);
+        // Internal ledger identifier; no signing credentials are created.
+        const randomHex = randomBytes(20).toString('hex');
         const address = `ATH_${randomHex.toUpperCase()}`;
 
         return {
             address: address,
-            encryptedPrivateKey: null,
-            encryptedMnemonic: null,
         };
     }
 
@@ -23,15 +19,9 @@ export class WalletService {
         return res.rows[0]?.balance_ath || '0.00';
     }
 
-    static async getTokenBalance(address: string, tokenType: string) {
-        // Map tokenAddress to internal column if necessary, or use a generic approach
-        // For now, mapping everything to balance_ath as requested
-        const res = await query('SELECT balance_ath FROM wallets WHERE address = $1', [address]);
-        return res.rows[0]?.balance_ath || '0.00';
-    }
-
     // Internal Transfer Logic (Database-only)
     static async transfer(senderId: string | null, recipientIdentifier: string, amount: string, type: string = 'send', symbol: string = 'ATH') {
+        if (symbol !== 'ATH') throw new Error('Only internal ATH transfers are supported.');
         const pool = (await import('../db/postgres')).default;
         const Transaction = (await import('../models/Transaction')).default;
         const client = await pool.connect();

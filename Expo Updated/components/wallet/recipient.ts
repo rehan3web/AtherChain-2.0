@@ -11,7 +11,7 @@ export function normalizeRecipient(method: RecipientMethod, value: string): Tran
   };
 }
 
-/** Local format checks only, not account existence or on-chain verification. */
+/** Local format checks only; the backend verifies account existence. */
 export function recipientError(method: RecipientMethod, value: string): string | null {
   const normalized = normalizeRecipient(method, value).value;
   if (!normalized) {
@@ -29,8 +29,8 @@ export function recipientError(method: RecipientMethod, value: string): string |
       ? null
       : 'Use 3–32 letters, numbers, underscores or dots.';
   }
-  const valid = /^0x/i.test(normalized)
+  const valid = /^ATH_[0-9a-f]{40}$/i.test(normalized) || (/^0x/i.test(normalized)
     ? /^0x[0-9a-fA-F]{40}$/i.test(normalized)
-    : /^[a-zA-Z0-9]{20,128}$/.test(normalized);
+    : /^[a-zA-Z0-9]{20,128}$/.test(normalized));
   return valid ? null : 'Enter a complete wallet address without spaces.';
 }

@@ -7,8 +7,6 @@ import { connectMongo } from './db/mongo';
 import pool from './db/postgres';
 import redis from './db/redis';
 
-// Removed legacy blockchain workers
-
 // Routes Imports (Placeholders for now)
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';

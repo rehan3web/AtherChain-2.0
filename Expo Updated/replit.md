@@ -23,16 +23,18 @@ This is the standalone Expo SDK 58 / React Native app. Preserve its existing scr
 - Cross-platform JavaScript export: `CI=1 pnpm exec expo export --platform all --output-dir generated-artifacts/verification-build`
 - Outputs in `generated-artifacts/` are excluded from Git and the target's deployment ignore file.
 
-The current migration checks pass (45 tests), the style audit preserves every original style expression in 36 changed TSX files, TypeScript passes, and Android/iOS/web JavaScript exports pass. The combined legacy suite is **not green**: 130 of 193 tests pass; 63 fail, primarily because old harnesses reject new API imports or assert retired demo outcomes. One imported palette contrast failure remains unchanged. Do not hide or describe these failures as passing.
+The dedicated app checks now include 46 tests, including internal ledger address validation. During the initial migration, the style audit preserved original style expressions in 36 changed TSX files and Android/iOS/web JavaScript exports passed. Native-device operation remains unverified. The last combined legacy run before backend cleanup was **not green**: 130 of 193 tests passed; 63 failed, primarily because old harnesses reject new API imports or assert retired demo outcomes. One imported palette contrast failure remained unchanged. Do not hide or describe those failures as passing.
 
 ## Scope and limitations
 
-`Backend` and `Expo Old` are read-only references; application-source changes belong here. The root managed workflow configuration is only for preview startup.
+The initial UI migration used `Backend` and `Expo Old` as read-only references. The user subsequently authorized removing blockchain functionality from `Backend`; that newer request supersedes the earlier backend read-only boundary. `Expo Old` remains unchanged. The root managed workflow configuration is only for preview startup.
 
 Native app identifiers, associated domain and public EAS project ID were carried over from Expo Old. Passkeys require a native development/release build and correct domain/signing associations; native push requires the corresponding platform credentials and permission. Native-device operation was not verified. Signed-in screens were not visually verified through the public screenshot browser.
 
 Backend support accepts one image per ticket/reply, not videos or multiple attachments. KYC uses actual document uploads and prompted camera frames; review results come only from the backend, not timers. No automated biometric liveness verdict is claimed. Missing backend features such as saved items and total-strike rewards are shown as unsupported/unavailable rather than populated with fake values.
 
 The backend does not provide payment idempotency or an atomic locked-quote contract. After an uncertain financial response, check history before restarting or submitting again. These upstream limitations cannot be fixed by modifying this app alone.
+
+The backend is now centralized-only: Solidity/artifacts, chain dependencies/configuration, Web3 vaults, wrapped-token swap stubs, bridge-fee claims and gas-estimation endpoints were removed. The app no longer exposes unused bridge-claim API helpers. See `../Backend/BLOCKCHAIN_REMOVAL.md` for supported endpoints and verification commands. No live database tables, records, balances or saved secrets were deleted.
 
 See `BACKEND_MIGRATION_REPORT.html` for the API inventory, changed files, verification results and remaining limitations. No publishing was performed.

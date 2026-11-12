@@ -9,12 +9,12 @@ const fix = async () => {
 
         if (res.rows.length === 0) {
             console.log('Wallet missing. Creating...');
-            const { address, encryptedPrivateKey, encryptedMnemonic } = await WalletService.createWallet();
+            const { address } = await WalletService.createWallet();
 
             await pool.query(
-                `INSERT INTO wallets (user_id, address, encrypted_private_key, encrypted_mnemonic, balance_at, balance_ath)
-                 VALUES ($1, $2, $3, $4, 0, 0)`,
-                [userId, address, encryptedPrivateKey, encryptedMnemonic]
+                `INSERT INTO wallets (user_id, address, balance_at, balance_ath)
+                 VALUES ($1, $2, 0, 0)`,
+                [userId, address]
             );
             console.log(`Wallet created and saved for ${userId}: ${address}`);
         } else {

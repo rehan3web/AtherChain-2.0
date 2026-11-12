@@ -1,10 +1,6 @@
 import { Request, Response } from 'express';
 import pool, { query } from '../db/postgres';
-import { WalletService } from '../services/wallet';
-import { UserModel } from '../models/user';
 import Transaction from '../models/Transaction';
-import Claim from '../models/Claim';
-import { env } from '../config/env';
 
 export const getWalletStats = async (req: Request | any, res: Response) => {
     try {
@@ -32,14 +28,12 @@ export const getWalletStats = async (req: Request | any, res: Response) => {
         // 2. Use DB Balances
         const walletRes = await query('SELECT balance_ath FROM wallets WHERE user_id = $1', [userId]);
         const balanceATH = walletRes.rows[0]?.balance_ath || '0.00';
-        const balanceWATH = '0.00'; // Or fetch if balance_wath column added
 
         res.json({
             email,
             username,
             at_balance: at_balance || '0.00',
             ath_balance: balanceATH,
-            wath_balance: balanceWATH,
             wallet_address: address,
             kyc_status: kyc_status,
             is_transfer_enabled: is_transfer_enabled && !transfer_paused && isTransferGlobal,
@@ -189,70 +183,3 @@ export const lookupAddress = async (req: Request | any, res: Response) => {
         res.status(500).json({ message: 'Lookup failed' });
     }
 };
-
-// getGasPrice removed
-
-export const requestClaim = async (req: Request | any, res: Response) => {
-    try {
-        const userId = req.user.id;
-
-        // 1. Fetch User and KYC status
-        const user = await UserModel.findById(userId);
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        if (user.kyc_status !== 'approved') {
-            return res.status(403).json({ message: 'Only KYC verified users can claim bridge fee.' });
-        }
-
-        // 2. Check if already claimed or pending
-        const existingClaim = await Claim.findOne({ userId });
-        if (existingClaim) {
-            if (existingClaim.status === 'sent') {
-                return res.status(400).json({ message: 'You have already claimed your bridge fee.' });
-            }
-            if (existingClaim.status === 'pending' || existingClaim.status === 'processing') {
-                return res.status(400).json({ message: 'Your claim request is already being processed.' });
-            }
-        }
-
-        // 3. Instant Internal Transfer from Treasury
-        const treasuryAddr = WalletService.getTreasuryAddress();
-        const tx = await WalletService.transfer(null, userId, '0.1', 'fee_claim', 'ATH');
-
-        // 4. Persistence: Create a claim record to block future requests
-        await Claim.create({
-            userId,
-            walletAddress: user.wallet_address || (await WalletService.getBalance(userId)),
-            amount: '0.1',
-            txHash: tx.hash,
-            status: 'sent'
-        });
-
-        res.json({ message: 'Claim successful', txHash: tx.hash, amount: '0.1' });
-
-    } catch (error) {
-        console.error('requestClaim error:', error);
-        res.status(500).json({ message: 'Failed to request claim' });
-    }
-};
-
-export const getClaimStatus = async (req: Request | any, res: Response) => {
-    try {
-        const userId = req.user.id;
-        const claim = await Claim.findOne({ userId }).sort({ createdAt: -1 });
-
-        if (!claim) {
-            return res.json(null);
-        }
-
-        res.json({
-            id: claim._id,
-            ...claim.toObject()
-        });
-    } catch (error) {
-        console.error('getClaimStatus error:', error);
-        res.status(500).json({ message: 'Failed to fetch claim status' });
-    }
-};
-
-

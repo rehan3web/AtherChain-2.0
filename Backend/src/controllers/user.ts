@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { UserModel } from '../models/user';
 import { WalletService } from '../services/wallet';
-import { env } from '../config/env';
 import { query } from '../db/postgres';
 
 export const getProfile = async (req: Request | any, res: Response) => {
@@ -12,24 +11,13 @@ export const getProfile = async (req: Request | any, res: Response) => {
         const user = await UserModel.findById(userId);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // Fetch live balances
-        let balanceATH = '0.0';
-        let balanceWATH = '0.0';
-        try {
-            if (user.address && WalletService.isAddress(user.address)) {
-                balanceATH = await WalletService.getBalance(user.address);
-                balanceWATH = await WalletService.getTokenBalance(user.address, env.WATH_TOKEN_ADDRESS);
-            }
-        } catch (e) {
-            console.error('Failed to fetch blockchain balances', e);
-        }
+        const balanceATH = user.address ? await WalletService.getBalance(user.address) : '0.0';
 
         const { twofa_secret, ...safeUser } = user;
 
         res.json({
             ...safeUser,
-            balance_ath: balanceATH,
-            balance_wath: balanceWATH
+            balance_ath: balanceATH
         });
     } catch (error) {
         console.error(error);

@@ -100,8 +100,6 @@ const setupDb = async () => {
             CREATE TABLE IF NOT EXISTS wallets (
                 user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                 address VARCHAR(255) UNIQUE NOT NULL,
-                encrypted_private_key TEXT NOT NULL,
-                encrypted_mnemonic TEXT NOT NULL,
                 balance_at NUMERIC(20, 8) DEFAULT 0,
                 balance_ath NUMERIC(20, 8) DEFAULT 0,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -111,13 +109,8 @@ const setupDb = async () => {
         // Ensure columns exist (from fix_wallet.ts and init.ts migrations)
         const walletColumns = [
             "balance_at NUMERIC(20, 8) DEFAULT 0", // Redundant with CREATE but safe
-            "balance_ath NUMERIC(20, 8) DEFAULT 0",
-            "encrypted_private_key TEXT", // Make nullable
-            "encrypted_mnemonic TEXT"      // Make nullable
+            "balance_ath NUMERIC(20, 8) DEFAULT 0"
         ];
-
-        await client.query(`ALTER TABLE wallets ALTER COLUMN encrypted_private_key DROP NOT NULL`);
-        await client.query(`ALTER TABLE wallets ALTER COLUMN encrypted_mnemonic DROP NOT NULL`);
 
         for (const col of walletColumns) {
             const colName = col.split(' ')[0];
@@ -133,36 +126,6 @@ const setupDb = async () => {
 
         // Force address column resize
         await client.query(`ALTER TABLE wallets ALTER COLUMN address TYPE VARCHAR(255)`);
-
-        // ==========================================
-        // 2b. Web3 Wallet Vaults (non-custodial EVM)
-        // ==========================================
-        // These store the user's self-custodied EVM wallet, encrypted CLIENT-SIDE.
-        // The server holds only opaque ciphertext and never has the PIN, so it
-        // cannot decrypt these rows. Distinct from the `wallets` table above,
-        // which is the custodial AetherChain ledger.
-        console.log('🔐 Setting up Web3 wallet vaults...');
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS wallet_vaults (
-                user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                envelope JSONB NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-        `);
-
-        // Peppers live in their own table on purpose. The whole point of the
-        // pepper is that leaking the envelope table alone must not be enough to
-        // brute-force a 6-digit PIN offline — that mitigation disappears if the
-        // two are stored side by side. Keep them separate, and if you ever add
-        // per-table access controls or separate backups, split them there too.
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS wallet_vault_peppers (
-                user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                pepper CHAR(64) NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-        `);
 
         // ==========================================
         // 3. KYC System (Requests, Docs, Logs, History)

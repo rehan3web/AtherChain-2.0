@@ -8,7 +8,7 @@ import { env } from '../config/env';
 import { emailService } from './emailService';
 import MiningLog from '../models/MiningLog';
 import Transaction from '../models/Transaction';
-import Claim from '../models/Claim';
+import mongoose from 'mongoose';
 
 // Pre-computed dummy hash to prevent timing attacks when an email is not found
 const DUMMY_HASH = '$2a$10$7EqJtq98hPqEX7fNZaFWoO.Q9v5K2B9P6w3I6rN5y8qY0qO4eZ9re';
@@ -552,7 +552,7 @@ export const AccountDeletionService = {
             );
 
             // 5. Delete from users table!
-            // All cascading tables (wallets, wallet_vaults, peppers, kyc_requests, kyc_documents,
+            // All cascading account tables (wallets, kyc_requests, kyc_documents,
             // kyc_status_history, support_tickets, notification_reads, push_subscriptions,
             // device_fingerprints, account_deletion_requests) will be deleted automatically.
             await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
@@ -572,7 +572,8 @@ export const AccountDeletionService = {
             await Promise.allSettled([
                 MiningLog.deleteMany({ userId: userId.toString() }),
                 Transaction.deleteMany({ userId: userId.toString() }),
-                Claim.deleteMany({ userId: userId.toString() }),
+                // Retain account-erasure support for historical records.
+                mongoose.connection.collection('claims').deleteMany({ userId: userId.toString() }),
             ]);
             console.log(`✅ Cleaned MongoDB records for user: ${userId}`);
         } catch (mongoError) {

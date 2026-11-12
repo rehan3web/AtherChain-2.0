@@ -135,8 +135,6 @@ export const walletApi = {
   stats: () => request('/wallet/stats'),
   send: (recipient: string, amount: number) => post('/wallet/send', { recipient, amount }),
   lookup: (identifier: string) => post('/wallet/lookup', { identifier }),
-  claim: () => post('/wallet/claim'),
-  claimStatus: () => request('/wallet/claim-status'),
 };
 export const swapApi = {
   rate: () => request('/swap/rate'),

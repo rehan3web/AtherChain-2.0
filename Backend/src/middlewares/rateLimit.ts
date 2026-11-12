@@ -41,11 +41,3 @@ export function rateLimit(options: { windowSeconds: number; max: number; bucket:
         }
     };
 }
-
-/**
- * Vault endpoints: 30 requests per 5 minutes per user.
- *
- * Generous enough for normal use (login sync, a few saves) but far below what
- * an attacker would need to harvest peppers or probe vaults at scale.
- */
-export const vaultRateLimit = rateLimit({ windowSeconds: 300, max: 30, bucket: 'vault' });

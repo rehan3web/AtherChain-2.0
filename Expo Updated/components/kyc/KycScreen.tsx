@@ -7,8 +7,8 @@ import { useColors } from '@/hooks/useColors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { Sheet } from '@/components/wallet/Sheet';
 import {
-  EMPTY_PERSONAL, EMPTY_RESIDENCE, validatePersonal, validateResidence,
-  type DocumentType, type FieldErrors, type Personal, type Photo, type Residence, type KycReviewStatus,
+  EMPTY_PERSONAL, EMPTY_RESIDENCE, validatePersonal, validateResidence, faceDataUri,
+  type DocumentType, type FieldErrors, type Personal, type Photo, type Residence, type KycReviewStatus, type FacePhoto,
 } from './model';
 import { chooseKycPhoto } from './media';
 import { DocumentStep, IntroStep, PersonalStep, ResidenceStep, ResultStep } from './Steps';
@@ -26,10 +26,14 @@ import { COUNTRIES } from './countries';
 export function KycScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState(0);
+  const [step, setStepState] = useState(0);
+  const currentStep = useRef(step);
+  const setStep = (value: number) => { currentStep.current = value; setStepState(value); };
   const [doc, setDoc] = useState<DocumentType | null>(null);
   const [reviewStatus, setReviewStatus] = useState<KycReviewStatus>('pending');
-  const { showToast } = useToast();
+  const { showToast, dismissToast } = useToast();
+  const failureToast = useRef<number | null>(null);
+  const clearFailure = () => { if (failureToast.current !== null) dismissToast(failureToast.current); failureToast.current = null; };
   const resource = useBackendResource(kycApi.status);
   const hydrated = useRef(false);
   useEffect(() => {
@@ -48,10 +52,8 @@ export function KycScreen() {
   const [residence, setResidence] = useState<Residence>(EMPTY_RESIDENCE);
   const [front, setFront] = useState<Photo | null>(null);
   const [back, setBack] = useState<Photo | null>(null);
-  const [faceTick, setFaceTick] = useState(0);
   const [foreground, setForeground] = useState(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [photoErr, setPhotoErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [countryOpen, setCountryOpen] = useState(false);
@@ -71,12 +73,25 @@ export function KycScreen() {
     const timer = setInterval(() => { void resource.reload(); }, 15000);
     return () => clearInterval(timer);
   }, [step, foreground, resource.reload]);
-  const submitFace = async (base64: string) => {
-    if (lock.current) return;
-    if (faceTick < 4) { setFaceTick(value => value + 2); return; }
+  const pendingReview = () => {
+    if (!mounted.current) return;
+    clearFailure();
+    setReviewStatus('pending'); setStep(7);
+    setPersonal(EMPTY_PERSONAL); setResidence(EMPTY_RESIDENCE); setFront(null); setBack(null);
+    refreshBackendData();
+  };
+  const warn = (body: string) => showToast({ kind: 'error', title: 'Identity verification', body });
+  const submitFace = async (photo: FacePhoto) => {
+    if (lock.current || !mounted.current || currentStep.current !== 6) return;
+    clearFailure();
     lock.current = true; setBusy(true);
+    let sent = false;
     try {
-      if (!front || !back || !doc || !base64) throw new Error('Capture both document sides and a clear face image.');
+      const personalErrors = validatePersonal(personal), residenceErrors = validateResidence(residence);
+      if (Object.keys(personalErrors).length) { setErrors(personalErrors); setStep(2); throw new Error(Object.values(personalErrors)[0]); }
+      if (Object.keys(residenceErrors).length) { setErrors(residenceErrors); setStep(3); throw new Error(Object.values(residenceErrors)[0]); }
+      if (!front || !back || !doc) throw new Error('Capture both document sides and a clear live photo.');
+      const frame = faceDataUri(photo);
       const form = new FormData();
       const fields = {
         full_name: personal.name.trim(), father_name: personal.fatherName.trim(),
@@ -85,20 +100,26 @@ export function KycScreen() {
         country_code: COUNTRIES.find(country => country.name === residence.country)?.code ?? '',
         id_type: doc === 'driving' ? 'driving_license' : doc === 'id' ? 'national_id' : 'passport',
         id_number: personal.documentNumber ?? '', id_expiry: personal.idExpiry ?? '',
-        face_scan_frame: `data:image/jpeg;base64,${base64}`,
-        verification_logs: JSON.stringify({ capture: 'camera', promptsCompleted: 3, automaticLivenessVerified: false }),
+        face_scan_frame: frame,
+        verification_logs: JSON.stringify({ capture: 'front_camera', photosCaptured: 1, automaticLivenessVerified: false }),
       };
       Object.entries(fields).forEach(([key, value]) => form.append(key, value));
-      await appendImage(form, 'id_front', front);
-      await appendImage(form, 'id_back', back);
-      await kycApi.submit(form);
-      setReviewStatus('pending'); setStep(7);
-      setPersonal(EMPTY_PERSONAL); setResidence(EMPTY_RESIDENCE); setFront(null); setBack(null);
-      refreshBackendData();
+      await appendImage(form, 'id_front', front, 5_000_000);
+      await appendImage(form, 'id_back', back, 5_000_000);
+      if (!mounted.current || currentStep.current !== 6) return;
+      sent = true;
+      const result = await kycApi.submit(form);
+      if (result.status !== 'pending' && (await kycApi.status()).status !== 'pending')
+        throw new Error('Could not confirm submission. Check your KYC status before trying again.');
+      pendingReview();
     } catch (cause) {
-      showToast({ kind: 'error', title: 'KYC submission failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
-      setFaceTick(0); setStep(5);
-    } finally { lock.current = false; setBusy(false); }
+      const status = cause instanceof Error && 'status' in cause ? Number(cause.status) : 0;
+      // A lost response must not trigger an automatic second submission.
+      if (sent && (!status || status >= 500)) {
+        try { if ((await kycApi.status()).status === 'pending') { pendingReview(); return; } } catch { /* Preserve the form and report the original failure. */ }
+      }
+      if (mounted.current) failureToast.current = showToast({ kind: 'error', title: 'KYC submission failed', body: cause instanceof Error ? cause.message : 'Could not submit. Try a new live photo.' });
+    } finally { lock.current = false; if (mounted.current) setBusy(false); }
   };
   const exit = useCallback(() => {
     mounted.current = false;
@@ -108,8 +129,8 @@ export function KycScreen() {
     JSON.stringify(residence) !== JSON.stringify(EMPTY_RESIDENCE) || !!front || !!back;
 
   const goBack = useCallback(() => {
-    if (busy) return;
-    setErrors({}); setPhotoErr('');
+    if (lock.current || busy) return;
+    setErrors({});
     if (step === 7) { exit(); return; }
     if (step === 0) { if (dirty) setConfirm(true); else exit(); return; }
     setStep(step - 1);
@@ -123,12 +144,12 @@ export function KycScreen() {
 
   const pick = async (src: 'library' | 'camera', apply: (p: Photo) => void, frontCamera = false) => {
     if (lock.current) return;
-    lock.current = true; setBusy(true); setPhotoErr('');
+    lock.current = true; setBusy(true);
     try {
       const photo = await chooseKycPhoto(src, frontCamera);
       if (mounted.current && photo) apply(photo);
     } catch (e) {
-      if (mounted.current) setPhotoErr(e instanceof Error ? e.message : 'Could not open the camera or photos.');
+      if (mounted.current) warn(e instanceof Error ? e.message : 'Could not open the camera or photos.');
     } finally {
       lock.current = false;
       if (mounted.current) setBusy(false);
@@ -136,19 +157,18 @@ export function KycScreen() {
   };
 
   const next = () => {
-    if (busy) return;
+    if (lock.current || busy) return;
     if ((step === 1 && !doc) || (step === 4 && !front) || (step === 5 && !back)) return;
-    if (step === 2) { const e = validatePersonal(personal); setErrors(e); if (Object.keys(e).length) return; }
-    if (step === 3) { const e = validateResidence(residence); setErrors(e); if (Object.keys(e).length) return; }
-    setErrors({}); setPhotoErr('');
-    if (step === 5) setFaceTick(0);
+    if (step === 2) { const e = validatePersonal(personal); setErrors(e); if (Object.keys(e).length) { warn(Object.values(e)[0]); return; } }
+    if (step === 3) { const e = validateResidence(residence); setErrors(e); if (Object.keys(e).length) { warn(Object.values(e)[0]); return; } }
+    setErrors({});
     setStep(step + 1);
   };
   const resubmit = () => {
-    if (busy || reviewStatus !== 'rejected') return;
+    if (lock.current || busy || reviewStatus !== 'rejected') return;
     setDoc(null); setPersonal(EMPTY_PERSONAL); setResidence(EMPTY_RESIDENCE);
-    setFront(null); setBack(null); setFaceTick(0); setReviewStatus('pending');
-    setErrors({}); setPhotoErr(''); setLangOpen(false); setCountryOpen(false); setConfirm(false);
+    setFront(null); setBack(null); setReviewStatus('pending');
+    setErrors({}); setLangOpen(false); setCountryOpen(false); setConfirm(false);
     setStep(1);
   };
   const canNext = step === 1 ? !!doc : step === 4 ? !!front : step === 5 ? !!back : true;
@@ -165,7 +185,7 @@ export function KycScreen() {
         return (
           <View>
             <Heading title={`${side === 'front' ? 'Front' : 'Back'} of your ${docLabel}`} body="Use your real, valid ID. Lay it flat with all four corners clearly visible." />
-            <PhotoSlot side={side} photo={step === 4 ? front : back} busy={busy} error={photoErr}
+            <PhotoSlot side={side} photo={step === 4 ? front : back} busy={busy}
               onPick={src => pick(src, step === 4 ? setFront : setBack)}
               onRemove={() => (step === 4 ? setFront(null) : setBack(null))} />
           </View>
@@ -178,7 +198,7 @@ export function KycScreen() {
   const top = (Platform.OS === 'web' ? 67 : insets.top) + 8;
   const bottom = Math.max(20, insets.bottom, Platform.OS === 'web' ? 34 : 0);
   if (step === 6) {
-    return <FaceStep index={Math.floor(faceTick / 2)} remaining={2 - faceTick % 2} onBack={goBack} onCaptured={submitFace} />;
+    return <FaceStep submitting={busy} onBack={goBack} onCaptured={submitFace} />;
   }
   return (
     <View testID="kyc-screen" style={{ flex: 1, backgroundColor: c.miningPage ?? c.background }}>

@@ -18,14 +18,18 @@ export const auth = async (req: Request | any, res: Response, next: NextFunction
         // Check Session Validity (Force Logout Support)
         const sessionId = decoded.sessionId;
 
-        if (decoded.scope === 'session_management') {
-            req.user = { ...decoded };
-            return next();
+        const management = decoded.scope === 'session_management';
+        if (management && !(req.baseUrl === '/auth' &&
+            ((req.method === 'GET' && req.path === '/sessions') ||
+            (req.method === 'DELETE' && /^\/sessions\/[^/]+$/.test(req.path))))) {
+            return res.status(403).json({ message: 'This token can only manage individual sessions.' });
         }
 
         let sessionActive = false;
 
-        if (sessionId) {
+        if (management) {
+            sessionActive = true;
+        } else if (sessionId) {
             // New Session Logic
             const sessionExists = await redis.exists(`session:${sessionId}`);
             sessionActive = sessionExists === 1;
@@ -64,7 +68,6 @@ export const auth = async (req: Request | any, res: Response, next: NextFunction
             });
         }
 
-        req.user = { ...decoded, ...user };
         req.user = { ...decoded, ...user };
         next();
     } catch (err: any) {

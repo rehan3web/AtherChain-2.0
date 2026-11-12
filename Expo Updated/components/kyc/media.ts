@@ -20,7 +20,8 @@ export async function chooseKycPhoto(source: 'library' | 'camera', frontCamera =
   const asset = result.assets?.[0];
   if (!asset?.uri) throw new Error('Could not read the image. Please try again.');
   if (asset.type && asset.type !== 'image') throw new Error('Please choose an image, not a video.');
-  const photo: Photo = { uri: asset.uri, name: asset.fileName ?? 'Photo', size: asset.fileSize };
+  const photo: Photo = { uri: asset.uri, name: asset.fileName ?? 'Photo', size: asset.fileSize,
+    mimeType: asset.mimeType, file: asset.file };
   const error = photoError(photo);
   if (error) throw new Error(error);
   return photo;

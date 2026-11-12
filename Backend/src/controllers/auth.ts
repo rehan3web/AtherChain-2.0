@@ -12,6 +12,7 @@ import { ReferralController } from './referral';
 import { emailService } from '../services/emailService';
 
 import { FingerprintModel } from '../models/fingerprint';
+import { getSessionRecovery } from '../services/sessionRecovery';
 
 export const register = async (req: Request, res: Response) => {
     try {
@@ -180,39 +181,8 @@ export const login = async (req: Request, res: Response) => {
         await redis.del(`failed_login:${user.id}`);
         await redis.del(`suspicious_activity:${user.id}`);
 
-        // Check Active Session Count
-        const activeSessionsCount = await redis.scard(`user_sessions:${user.id}`);
-
-        if (activeSessionsCount >= 2) {
-            // Fetch details to show user
-            const sessionIds = await redis.smembers(`user_sessions:${user.id}`);
-            const sessions: any[] = [];
-            for (const sid of sessionIds) {
-                const sData = await redis.hgetall(`session:${sid}`);
-                if (Object.keys(sData).length > 0) {
-                    sessions.push({ id: sid, ...sData });
-                } else {
-                    await redis.srem(`user_sessions:${user.id}`, sid); // cleanup
-                }
-            }
-            // Double check count after cleanup
-            if (sessions.length >= 2) {
-                // Generate a temporary token for session management
-                const sessionManagementToken = jwt.sign(
-                    { id: user.id, role: user.role, scope: 'session_management' },
-                    env.JWT_SECRET,
-                    { expiresIn: '10m' }
-                );
-
-                return res.status(403).json({
-                    message: 'You cannot login on multiple devices. Only 2 active sessions are allowed.',
-                    code: 'SESSION_LIMIT_EXCEEDED',
-                    sessions: sessions,
-                    sessionManagementToken: sessionManagementToken,
-                    userId: user.id
-                });
-            }
-        }
+        const recovery = await getSessionRecovery(user);
+        if (recovery) return res.status(403).json(recovery);
 
         // 2FA Check
         if (user.twofa_enabled) {
@@ -277,32 +247,6 @@ export const verify2FALogin = async (req: Request, res: Response) => {
 
         if (!user.twofa_enabled || !user.twofa_secret) return res.status(400).json({ message: '2FA not enabled for this user' });
 
-        // Check Active Session Count
-        const activeSessionsCount = await redis.scard(`user_sessions:${user.id}`);
-
-        if (activeSessionsCount >= 2) {
-            // Fetch details to show user
-            const sessionIds = await redis.smembers(`user_sessions:${user.id}`);
-            const sessions: any[] = [];
-            for (const sid of sessionIds) {
-                const sData = await redis.hgetall(`session:${sid}`);
-                if (Object.keys(sData).length > 0) {
-                    sessions.push({ id: sid, ...sData });
-                } else {
-                    await redis.srem(`user_sessions:${user.id}`, sid); // cleanup
-                }
-            }
-
-            if (sessions.length >= 2) {
-                return res.status(403).json({
-                    message: 'You cannot login on multiple devices. Only 2 active sessions are allowed.',
-                    code: 'SESSION_LIMIT_EXCEEDED',
-                    sessions: sessions,
-                    userId: user.id
-                });
-            }
-        }
-
         const verified = speakeasy.totp.verify({
             secret: user.twofa_secret,
             encoding: 'base32',
@@ -311,6 +255,8 @@ export const verify2FALogin = async (req: Request, res: Response) => {
         });
 
         if (!verified) return res.status(400).json({ message: 'Invalid OTP' });
+        const recovery = await getSessionRecovery(user);
+        if (recovery) return res.status(403).json(recovery);
 
         // Generate Session ID
         const sessionId = uuidv4();
@@ -359,6 +305,10 @@ export const verifyEmail = async (req: Request, res: Response) => {
         if (user.otp_code !== otp) {
             return res.status(400).json({ message: 'Invalid OTP' });
         }
+
+        if (user.is_blocked) return res.status(403).json({ message: 'Your account has been blocked', code: 'USER_BLOCKED' });
+        const recovery = await getSessionRecovery(user);
+        if (recovery) return res.status(403).json(recovery);
 
         // Verify User
         await query('UPDATE users SET is_email_verified = TRUE, otp_code = NULL, otp_expires_at = NULL WHERE id = $1', [user.id]);
@@ -509,41 +459,12 @@ export const verifySuspiciousLogin = async (req: Request, res: Response) => {
         // if (!isSuspicious) ... maybe they waited 24h?
         // Let's just proceed if OTP is valid.
 
-        // Clear Flags
+        // Leave the verified OTP usable while the user frees a session slot.
+        const recovery = await getSessionRecovery(user);
+        if (recovery) return res.status(403).json(recovery);
         await redis.del(`failed_login:${user.id}`);
         await redis.del(`suspicious_activity:${user.id}`);
         await query('UPDATE users SET otp_code = NULL, otp_expires_at = NULL WHERE id = $1', [user.id]);
-
-        // Generate Session (Matched with Login Logic)
-        // Check Active Session Count
-        const activeSessionsCount = await redis.scard(`user_sessions:${user.id}`);
-
-        if (activeSessionsCount >= 2) {
-            const sessionIds = await redis.smembers(`user_sessions:${user.id}`);
-            const sessions: any[] = [];
-            for (const sid of sessionIds) {
-                const sData = await redis.hgetall(`session:${sid}`);
-                if (Object.keys(sData).length > 0) {
-                    sessions.push({ id: sid, ...sData });
-                } else {
-                    await redis.srem(`user_sessions:${user.id}`, sid);
-                }
-            }
-            if (sessions.length >= 2) {
-                const sessionManagementToken = jwt.sign(
-                    { id: user.id, role: user.role, scope: 'session_management' },
-                    env.JWT_SECRET,
-                    { expiresIn: '10m' }
-                );
-                return res.status(403).json({
-                    message: 'You cannot login on multiple devices. Only 2 active sessions are allowed.',
-                    code: 'SESSION_LIMIT_EXCEEDED',
-                    sessions: sessions,
-                    sessionManagementToken: sessionManagementToken,
-                    userId: user.id
-                });
-            }
-        }
 
         const sessionId = uuidv4();
         const token = jwt.sign(

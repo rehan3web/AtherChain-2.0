@@ -173,7 +173,7 @@ export const submitKyc = async (req: Request | any, res: Response) => {
         );
 
         await client.query('COMMIT');
-        res.json({ message: 'KYC Application submitted for nodes inspection.' });
+        res.json({ message: 'KYC application submitted for manual review.', status: 'pending' });
 
     } catch (error: any) {
         await client.query('ROLLBACK');

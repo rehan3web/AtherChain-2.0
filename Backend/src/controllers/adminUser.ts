@@ -166,10 +166,10 @@ export const updateUserBalance = async (req: Request, res: Response) => {
                 // Technically we need a system "user" ID for treasury if we use WalletService.transfer
                 // Or we do a direct DB update and log it.
                 // Let's use a specialized method for administrative adjustments.
-                const res = await WalletService.transfer(null, String(userId), amount, 'admin_adjustment', 'ATH', req.get('Idempotency-Key'));
+                const res = await WalletService.transfer(null, String(userId), amount, 'admin_adjustment', 'ATH');
                 txHash = res.hash;
             } else {
-                const res = await WalletService.transfer(String(userId), treasuryAddr, amount, 'admin_adjustment', 'ATH', req.get('Idempotency-Key'));
+                const res = await WalletService.transfer(String(userId), treasuryAddr, amount, 'admin_adjustment', 'ATH');
                 txHash = res.hash;
             }
         } else {
@@ -231,7 +231,7 @@ export const adminSendAssets = async (req: Request, res: Response) => {
 
     try {
         if (asset !== 'ATH') return res.status(400).json({ message: 'Only internal ATH transfers are supported.' });
-        const txResult = await WalletService.transfer(String(userId), String(recipient), amount, 'admin_transfer', asset, req.get('Idempotency-Key'));
+        const txResult = await WalletService.transfer(String(userId), String(recipient), amount, 'admin_transfer', asset);
 
         await AuditService.log(String(adminId), String(userId), 'ADMIN_TRANSFER_FROM_USER', {
             recipient,

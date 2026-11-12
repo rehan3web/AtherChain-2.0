@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
@@ -27,18 +27,19 @@ export function Progress({ step, total }: { step: number; total: number }) {
   );
 }
 
-export function PrimaryButton({ label, onPress, disabled, testID, variant = 'solid' }: {
-  label: string; onPress: () => void; disabled?: boolean; testID?: string; variant?: 'solid' | 'ghost';
+export function PrimaryButton({ label, onPress, disabled, loading = false, testID, variant = 'solid' }: {
+  label: string; onPress: () => void; disabled?: boolean; loading?: boolean; testID?: string; variant?: 'solid' | 'ghost';
 }) {
   const c = useColors();
   const solid = variant === 'solid';
   return (
-    <Pressable testID={testID} onPress={onPress} disabled={disabled} accessibilityRole="button"
-      accessibilityState={{ disabled: !!disabled }}
+    <Pressable testID={testID} onPress={onPress} disabled={disabled || loading} accessibilityRole="button"
+      accessibilityLabel={label} accessibilityState={{ disabled: !!disabled || loading, busy: loading }}
       style={({ pressed }) => [s.button, {
         backgroundColor: solid ? (disabled ? c.walletDisabled : c.walletInk) : c.walletField,
       }, pressed && { transform: [{ scale: 0.98 }] }]}>
-      <Text style={[s.buttonText, { color: solid ? (disabled ? c.walletDisabledInk : c.walletOnInk) : c.walletInk }]}>{label}</Text>
+      {loading ? <ActivityIndicator testID={testID ? `${testID}-loading` : undefined} color={solid ? (disabled ? c.walletDisabledInk : c.walletOnInk) : c.walletInk} />
+        : <Text style={[s.buttonText, { color: solid ? (disabled ? c.walletDisabledInk : c.walletOnInk) : c.walletInk }]}>{label}</Text>}
     </Pressable>
   );
 }
@@ -61,7 +62,6 @@ export function Field({ label, error, testID, ...rest }: TextInputProps & { labe
       <TextInput testID={testID} accessibilityLabel={label} placeholderTextColor={c.walletMuted}
         style={[s.input, { backgroundColor: c.walletField, color: c.walletInk, borderColor: error ? c.walletError : 'transparent' }]}
         {...rest} />
-      {!!error && <Text accessibilityRole="alert" style={[s.error, { color: c.walletError }]}>{error}</Text>}
     </View>
   );
 }

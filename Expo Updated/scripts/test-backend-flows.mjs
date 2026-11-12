@@ -47,7 +47,8 @@ function loginHarness(login) {
   const entered = [], routes = [], verifications = [];
   const component = load('../components/onboarding/LoginScreen.tsx', {
     react: react.react,
-    'react-native': { BackHandler: {}, Keyboard: { dismiss() {} }, Text: 'Text' },
+    'react-native': { BackHandler: {}, Keyboard: { dismiss() {} }, Text: 'Text',
+      Animated: { Value: class {}, View: 'Animated.View' } },
     'expo-router': { router: { replace: route => routes.push(route), canGoBack: () => false }, useFocusEffect() {} },
     '@/hooks/useColors': { useColors: () => ({}) },
     '@/components/kyc/parts': { Heading: 'Heading', Notice: 'Notice', PrimaryButton: 'Button', Progress: 'Progress', s: {} },
@@ -60,9 +61,12 @@ function loginHarness(login) {
       ApiError: class extends Error {},
     },
     '@/services/passkeys': {},
+    '@/components/toast/ToastProvider': { useToast: () => ({ showToast() {} }) },
+    './SessionLimitSheet': { SessionLimitSheet: 'SessionLimitSheet' },
+    './sessionLimit': load('../components/onboarding/sessionLimit.ts', {}),
   });
   let tree;
-  const render = () => { tree = react.render(() => component.LoginScreen()); return tree; };
+  const render = () => { tree = react.render(() => component.LoginScreen()).props.children[0]; return tree; };
   const button = id => find(tree.props.footer, id).props;
   render();
   find(tree, 'login-identifier').props.onChangeText('alice@example.test'); render();
@@ -86,7 +90,7 @@ test('invalid credentials never enter the wallet', async () => {
   const app = loginHarness(async () => { throw new Error('Invalid credentials'); });
   await app.button('login-submit').onPress(); app.render();
   assert.equal(app.entered.length, 0); assert.equal(app.routes.length, 0);
-  assert.equal(app.button('login-submit').label, 'Retry');
+  assert.equal(app.button('login-submit').label, 'Login');
 });
 
 test('a two-factor challenge cannot be bypassed by a successful password response', async () => {

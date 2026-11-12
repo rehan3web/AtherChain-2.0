@@ -8,15 +8,11 @@ export const DOCUMENTS = [
 ];
 export type Personal = { name: string; fatherName: string; dob: string; language: string; documentNumber?: string; idExpiry?: string };
 export type Residence = { address: string; city: string; state: string; country: string };
-export type Photo = { uri: string; name: string; size?: number };
+export type Photo = { uri: string; name: string; size?: number; mimeType?: string; file?: Blob };
+export type FacePhoto = { base64: string; mimeType: string };
 export type FieldErrors = Record<string, string>;
 export const EMPTY_PERSONAL: Personal = { name: '', fatherName: '', dob: '', language: '', documentNumber: '', idExpiry: '' };
 export const EMPTY_RESIDENCE: Residence = { address: '', city: '', state: '', country: '' };
-export const FACE_STEPS = [
-  { id: 'left', title: 'Turn your head left', body: 'Gently turn to your left, then capture a photo.' },
-  { id: 'right', title: 'Turn your head right', body: 'Gently turn to your right, then capture a photo.' },
-  { id: 'mouth', title: 'Open your mouth', body: 'Face forward and open your mouth, then capture a photo.' },
-] as const;
 
 export function validatePersonal(value: Personal, today = new Date()): FieldErrors {
   const errors: FieldErrors = {};
@@ -57,5 +53,16 @@ export function validateResidence(value: Residence): FieldErrors {
 export function photoError(photo: Photo): string | null {
   if (!photo.uri) return 'Could not read this image. Please try another.';
   if (photo.size != null && photo.size > 5_000_000) return 'Choose an image under 5 MB.';
+  if (photo.mimeType && !['image/jpeg', 'image/png', 'image/webp'].includes(photo.mimeType)) return 'Choose a JPG, PNG or WEBP image.';
   return null;
+}
+
+export function faceDataUri(photo: FacePhoto): string {
+  const { base64, mimeType } = photo;
+  const signature = mimeType === 'image/jpeg' ? '/9j/' : mimeType === 'image/png' ? 'iVBORw0KGgo' : mimeType === 'image/webp' ? 'UklGR' : null;
+  if (!signature || !base64 || base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || !base64.startsWith(signature))
+    throw new Error('Could not read the live photo. Take a new photo.');
+  if (base64.length * 3 / 4 - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0) > 5_000_000)
+    throw new Error('The live photo is too large. Take a new photo.');
+  return `data:${mimeType};base64,${base64}`;
 }

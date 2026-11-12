@@ -2,6 +2,10 @@
 
 This is the standalone Expo SDK 58 / React Native app. Preserve its existing screens, navigation, themes, assets and styles. The user chose **“Preserve updated screens only”** rather than adding old-app-only screens. Approved exceptions: correct misleading demo notices and add the two mandatory KYC document fields.
 
+The user subsequently authorized the targeted authentication/signup/session UX corrections documented in `AUTH_RECOVERY.md`. These are additional exceptions to the earlier preservation boundary, not permission for an unrelated redesign.
+
+The authorized single-photo KYC capture and upload corrections are documented in `KYC_UPLOADS.md`. They preserve mandatory documents/fields and manual review.
+
 ## Development
 
 - From this directory: `pnpm install --frozen-lockfile`.
@@ -23,7 +27,7 @@ This is the standalone Expo SDK 58 / React Native app. Preserve its existing scr
 - Cross-platform JavaScript export: `CI=1 pnpm exec expo export --platform all --output-dir generated-artifacts/verification-build`
 - Outputs in `generated-artifacts/` are excluded from Git and the target's deployment ignore file.
 
-The dedicated app checks now include 58 tests, including persisted payment-key recovery, actual API-proxy header forwarding and required environment-based API configuration. The backend has 37 isolated ledger/HTTP/failure-injection checks. During the initial migration, the style audit preserved original style expressions in 36 changed TSX files and Android/iOS/web JavaScript exports passed. Native-device operation remains unverified. The last combined legacy run before backend cleanup was **not green**: 130 of 193 tests passed; 63 failed, primarily because old harnesses reject new API imports or assert retired demo outcomes. One imported palette contrast failure remained unchanged. Do not hide or describe those failures as passing.
+The targeted app verification currently runs 100 checks across backend-facing flows, KYC/upload behavior, mining and current sessions. The backend has 46 isolated ledger/HTTP/authentication checks. During the initial migration, the style audit preserved original style expressions in 36 changed TSX files and Android/iOS/web JavaScript exports passed. Native-device operation remains unverified. The last combined legacy run before backend cleanup was **not green**: 130 of 193 tests passed; 63 failed, primarily because old harnesses reject new API imports or assert retired demo outcomes. KYC's obsolete simulated-review assertions have now been replaced with actual API/camera/upload fixtures while retaining country/language/icon regressions. One imported palette contrast failure remained unchanged. Do not describe historical failures as passing or assume obsolete demo harnesses test current authentication correctly.
 
 ## Scope and limitations
 

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import redis from '../db/redis';
+import { sessionDetails } from '../services/sessionRecovery';
 
 export const SessionController = {
     // Get all active sessions for the user
@@ -17,8 +18,7 @@ export const SessionController = {
                 const sessionData = await redis.hgetall(`session:${sessionId}`);
                 if (Object.keys(sessionData).length > 0) {
                     sessions.push({
-                        id: sessionId,
-                        ...sessionData,
+                        ...sessionDetails(sessionId, sessionData),
                         isCurrent: sessionId === currentSessionId,
                         lastActive: sessionData.lastActive // or calculate relative time on frontend
                     });
@@ -41,6 +41,9 @@ export const SessionController = {
             const userId = req.user.id;
             const { sessionId } = req.params;
 
+            if (!await redis.sismember(`user_sessions:${userId}`, sessionId)) {
+                return res.status(404).json({ message: 'Session not found for this account' });
+            }
             // Remove from Redis
             await redis.del(`session:${sessionId}`);
             await redis.srem(`user_sessions:${userId}`, sessionId);

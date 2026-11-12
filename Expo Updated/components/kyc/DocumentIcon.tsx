@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { DocumentType } from './model';
 
@@ -10,7 +11,7 @@ const PATHS: Record<DocumentType, string> = {
 
 export function DocumentIcon({ type, color }: { type: DocumentType; color: string }) {
   return (
-    <Svg width={24} height={24} viewBox="0 0 640 640" accessible={false}>
+    <Svg width={24} height={24} viewBox="0 0 640 640" {...(Platform.OS === 'web' ? { 'aria-hidden': true } : { accessible: false })}>
       <Path fill={color} d={PATHS[type]} />
     </Svg>
   );

@@ -83,6 +83,14 @@ test('configured requests use the same-origin proxy and bearer token', async () 
   assert.equal(calls[0].method, 'GET');
 });
 
+test('limited session deletion uses its explicit scoped token without storing it or clearing a normal session', async () => {
+  const { api, calls, storage } = apiHarness({ response: () => ({ status: 401, data: { message: 'Expired management token' } }) });
+  await assert.rejects(api.authApi.removeSessionManaged('old/session', 'limited-token'), /Expired management token/);
+  assert.equal(calls[0].url, '/api/auth/sessions/old%2Fsession');
+  assert.equal(calls[0].headers.Authorization, 'Bearer limited-token');
+  assert.equal(storage.get('ather_token'), 'test-token');
+});
+
 test('web and native requests use the configured API URL rather than an old fallback', async () => {
   for (const platform of ['web', 'ios', 'android']) {
     const { api, calls } = apiHarness({ platform, env: { EXPO_PUBLIC_API_URL: ' https://configured.test/v1/// ' } });

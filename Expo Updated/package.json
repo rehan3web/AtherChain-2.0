@@ -10,6 +10,8 @@
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:backend": "node --test scripts/test-backend-*.mjs scripts/test-mining.mjs",
+    "test:auth": "node --test scripts/test-backend-auth.mjs scripts/test-sessions.mjs",
+    "test:kyc": "node --test scripts/test-kyc.mjs scripts/test-backend-uploads.mjs",
     "audit:ui": "node scripts/audit-ui-preservation.mjs"
   },
   "devDependencies": {

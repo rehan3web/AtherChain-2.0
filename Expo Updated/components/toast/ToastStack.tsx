@@ -57,12 +57,12 @@ function ToastCard({ toast, index, count, open, onDismiss, onToggle }: {
       accessibilityElementsHidden={!visible} importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
       style={[styles.slot, { zIndex: count - index }, position]}>
       <Animated.View entering={reduced ? undefined : FadeInDown.duration(180)} exiting={reduced ? undefined : FadeOutRight.duration(180)}
-        style={[styles.card, { backgroundColor: front || open ? c.walletSurfaceTop : c.walletField, borderColor: c.miningHairline }]}>
+        style={[styles.card, { backgroundColor: front || open ? c.walletSurfaceTop : c.walletField, borderColor: toast.kind === 'error' ? c.walletError : c.miningHairline }]}>
         <Pressable onPress={onToggle} accessibilityRole="button" accessibilityLabel={[toast.title, toast.body].filter(Boolean).join('. ')}
           accessibilityHint="Tap to expand or collapse notifications" style={[styles.content, { opacity: visible ? 1 : 0 }]}>
           {toast.kind === 'success' ? <ConfirmedIcon size={18} /> : <Feather name={toast.kind === 'error' ? 'x-circle' : 'info'} size={18} color={toast.kind === 'error' ? c.walletError : c.walletSubtle} />}
           <View style={styles.text}>
-            <Text numberOfLines={1} style={[styles.title, { color: c.walletInk }]}>{toast.title}</Text>
+            <Text numberOfLines={1} style={[styles.title, { color: toast.kind === 'error' ? c.walletError : c.walletInk }]}>{toast.title}</Text>
             {!!toast.body && <Text numberOfLines={1} style={[styles.body, { color: c.walletSubtle }]}>{toast.body}</Text>}
           </View>
         </Pressable>

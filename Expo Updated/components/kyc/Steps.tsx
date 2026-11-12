@@ -21,7 +21,7 @@ export function IntroStep() {
         <Text style={[s.body, { color: c.walletSubtle, textAlign: 'center', marginTop: 8 }]}>Submit your real identity details, ID photos and face capture securely for review.</Text>
       </View>
       <Row icon="credit-card" title="Photograph an ID document" sub="Front and back, from your photos or camera" />
-      <Row icon="user" title="Follow the face instructions" sub="Turn left, turn right, open your mouth" />
+      <Row icon="user" title="Take one live photo" sub="Front-camera photo, then automatic submission for manual review" />
       <Row icon="map-pin" title="Add personal & home details" sub="Name, birth date, language, address" />
     </View>
   );
@@ -70,7 +70,6 @@ export function PersonalStep({ value, errors, onChange, onLanguage }: {
           </Text>
           <Feather name="chevron-down" size={18} color={c.walletMuted} />
         </Pressable>
-        {!!errors.language && <Text accessibilityRole="alert" style={[s.error, { color: c.walletError }]}>{errors.language}</Text>}
       </View>
     </View>
   );
@@ -103,7 +102,6 @@ export function ResidenceStep({ value, errors, onChange, onCountry }: { value: R
           </Text>
           <Feather name="chevron-down" size={18} color={c.walletMuted} />
         </Pressable>
-        {!!errors.country && <Text accessibilityRole="alert" style={[s.error, { color: c.walletError }]}>{errors.country}</Text>}
       </View>
     </View>
   );
@@ -118,7 +116,7 @@ const RESULT_COPY: Record<KycResultStatus, { icon: 'clock' | 'x' | 'check'; titl
   approved: { icon: 'check', title: 'Verification Approved', body: 'Your KYC journey is complete. You’re ready to explore everything AtherChain has to offer.', label: 'Approved' },
 };
 
-export function ResultStep({ document, status = 'approved' }: { document: DocumentType | null; status?: KycResultStatus }) {
+export function ResultStep({ document, status = 'pending' }: { document: DocumentType | null; status?: KycResultStatus }) {
   const c = useColors();
   const documentName = DOCUMENTS.find(item => item.id === document)?.label ?? 'Not selected';
   const copy = RESULT_COPY[status];
@@ -148,7 +146,7 @@ export function ResultStep({ document, status = 'approved' }: { document: Docume
         </View>
       </View>
       <Text style={{ fontFamily: 'DMSans_400Regular', fontSize: 12, color: c.walletMuted, textAlign: 'center' }}>
-        Simulated outcome · No real identity check was performed
+        Status is provided by the review team. A live photo alone does not verify biometric liveness.
       </Text>
     </View>
   );

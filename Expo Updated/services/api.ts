@@ -125,6 +125,10 @@ export const authApi = {
     post('/auth/reset-password', { email, token, newPassword }, true),
   getSessions: () => request('/auth/sessions'),
   removeSession: (id: string) => request(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  removeSessionManaged: (id: string, managementToken: string) =>
+    request(`/auth/sessions/${encodeURIComponent(id)}`, {
+      method: 'DELETE', public: true, headers: { Authorization: `Bearer ${managementToken}` },
+    }),
   removeAllSessions: () => request('/auth/sessions', { method: 'DELETE' }),
   approveQRLogin: (qrToken: string) => post('/auth/qr/approve', { qrToken }),
   passkeyLoginOptions: (payload: { email?: string; username?: string }) => post('/auth/passkey/login-options', payload, true),

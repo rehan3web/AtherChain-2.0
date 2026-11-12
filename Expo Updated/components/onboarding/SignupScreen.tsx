@@ -14,7 +14,7 @@ import { useToast } from '@/components/toast/ToastProvider';
 import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
 
 const COPY: Record<Exclude<SignupStep, 'otp'>, [string, string]> = {
-  identifier: ['Create your account', 'Enter your email or username to register with AtherChain.'],
+  identifier: ['Create your account', 'Enter your email to register with AtherChain.'],
   username: ['Choose a username', '3 to 30 letters, numbers, dots or underscores.'],
   password: ['Set a password', 'Use a strong, unique password with 8 to 128 characters.'],
   name: ['What should we call you?', 'Enter the name for your account.'],
@@ -26,6 +26,8 @@ const COPY: Record<Exclude<SignupStep, 'otp'>, [string, string]> = {
 export function SignupScreen() {
   const { showToast } = useToast();
   const registering = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const mounted = useRef(true);
   const [draft, setDraft] = useState<SignupDraft>(EMPTY_SIGNUP);
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
@@ -36,7 +38,7 @@ export function SignupScreen() {
   const refs = useRef<Record<string, { focus: () => void } | null>>({});
 
   const clear = useCallback(() => { setDraft(EMPTY_SIGNUP); setErrors({}); }, []);
-  useEffect(() => () => { otpCancel.current(); }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; otpCancel.current(); }; }, []);
 
   const goBack = useCallback(() => {
     if (registering.current) return;
@@ -68,10 +70,13 @@ export function SignupScreen() {
     if (skip) setDraft(d);
     const e = validateSignupStep(step, d);
     setErrors(e);
-    if (Object.keys(e).length) return;
+    if (Object.keys(e).length) {
+      showToast({ kind: 'error', title: 'Check your details', body: Object.values(e)[0] });
+      return;
+    }
     Keyboard.dismiss();
     if (step === 'phone') {
-      registering.current = true;
+      registering.current = true; setSaving(true);
       try {
         const phone = parsePhoneNumberFromString(d.phone, d.phoneCountry as CountryCode);
         await authApi.register({
@@ -81,11 +86,11 @@ export function SignupScreen() {
           referralCode: d.referral.trim() || undefined, country: d.country,
         });
       } catch (cause) {
-        showToast({ kind: 'error', title: 'Registration failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
+        if (mounted.current) showToast({ kind: 'error', title: 'Registration failed', body: cause instanceof Error ? cause.message : 'Please try again.' });
         return;
-      } finally { registering.current = false; }
+      } finally { registering.current = false; if (mounted.current) setSaving(false); }
     }
-    setDir(1); setIdx(i => Math.min(i + 1, SIGNUP_STEPS.length - 1));
+    if (mounted.current) { setDir(1); setIdx(i => Math.min(i + 1, SIGNUP_STEPS.length - 1)); }
   };
 
   const flagFor = COUNTRIES.find(x => x.name === draft.country)?.code ?? '';
@@ -95,12 +100,8 @@ export function SignupScreen() {
   const body = () => {
     switch (step) {
       case 'identifier': return <>
-        <AuthField testID="signup-identifier" label="Email or username" value={draft.identifier} onChangeText={set('identifier')}
+        <AuthField testID="signup-identifier" label="Email" value={draft.identifier} onChangeText={set('identifier')}
           error={errors.identifier} placeholder="you@example.com" keyboardType="email-address" {...noStoreProps} returnKeyType="next" onSubmitEditing={() => next()} />
-        {!!draft.identifier.trim() && !draft.identifier.includes('@') && (
-          <AuthField testID="signup-email" label="Email for verification" value={draft.email} onChangeText={set('email')}
-            error={errors.email} placeholder="you@example.com" keyboardType="email-address" {...noStoreProps} returnKeyType="next" onSubmitEditing={() => next()} />
-        )}
       </>;
       case 'username': return <AuthField testID="signup-username" label="Username" value={draft.username} onChangeText={set('username')}
         error={errors.username} placeholder="satoshi_n" {...noStoreProps} returnKeyType="next" onSubmitEditing={() => next()} />;
@@ -120,7 +121,7 @@ export function SignupScreen() {
         flag={flagFor} error={errors.country} onPress={() => { Keyboard.dismiss(); setSheet('country'); }} />;
       case 'referral': return <AuthField testID="signup-referral" label="Referral code (optional)" value={draft.referral} onChangeText={set('referral')}
         error={errors.referral} maxLength={32} placeholder="e.g. ATHER-7Q2" {...noStoreProps} returnKeyType="done" onSubmitEditing={() => next()} />;
-      case 'phone': return <PhoneField code={draft.phoneCountry} value={draft.phone} onChange={set('phone')} error={errors.phone ?? errors.phoneCountry}
+      case 'phone': return <PhoneField code={draft.phoneCountry} value={draft.phone} onChange={set('phone')} disabled={saving} error={errors.phone ?? errors.phoneCountry}
         onPickCode={() => { Keyboard.dismiss(); setSheet('calling'); }} onSubmit={() => next()} />;
       default: return null;
     }
@@ -132,7 +133,7 @@ export function SignupScreen() {
   return (
     <Shell testID="signup-screen" backID="signup-back" backLabel={idx === 0 ? 'Back to welcome' : 'Previous step'} onBack={goBack}
       footer={<>
-        <PrimaryButton testID="signup-next" label="Next" onPress={() => next()} />
+        <PrimaryButton testID="signup-next" label="Next" loading={saving} onPress={() => next()} />
         {step === 'referral' && <PrimaryButton testID="signup-skip" variant="ghost" label="Skip" onPress={() => next(true)} />}
       </>}>
       <Progress step={idx + 1} total={SIGNUP_STEPS.length} />

@@ -1,19 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Keyboard, Text } from 'react-native';
+import { Animated, BackHandler, Keyboard } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { useColors } from '@/hooks/useColors';
-import { Heading, Notice, PrimaryButton, Progress, s } from '@/components/kyc/parts';
+import { Heading, Notice, PrimaryButton, Progress } from '@/components/kyc/parts';
 import { AuthField, PasswordField, noStoreProps } from './SignupFields';
 import { Shell, StepTransition } from './Shell';
 import { validateLogin } from './model';
 import { completeLogin, useDemoSession } from './session';
 import { authApi, ApiError } from '@/services/api';
 import { getCredential } from '@/services/passkeys';
+import { useToast } from '@/components/toast/ToastProvider';
+import { SessionLimitSheet } from './SessionLimitSheet';
+import { readSessionLimit, type SessionLimit } from './sessionLimit';
 
 type Step = 'identifier' | 'password' | 'passkey';
 
 export function LoginScreen() {
-  const c = useColors();
+  const { showToast } = useToast();
   const session = useDemoSession();
   const [step, setStep] = useState<Step>('identifier');
   const [dir, setDir] = useState<1 | -1>(1);
@@ -22,19 +24,26 @@ export function LoginScreen() {
   const [challenge, setChallenge] = useState<{ kind: 'twofa' | 'email' | 'verify-email'; userId: string; email?: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [limit, setLimit] = useState<SessionLimit | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const pending = useRef<(() => Promise<any>) | null>(null);
+  const shake = useRef(new Animated.Value(0)).current;
   const busy = useRef(false);
   const active = useRef(true);
+  const mounted = useRef(true);
 
-  const clear = useCallback(() => { setIdentifier(''); setPassword(''); setChallenge(null); setErrors({}); setSaveError(null); }, []);
-  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const clear = useCallback(() => { setIdentifier(''); setPassword(''); setChallenge(null); setErrors({}); setLimit(null); pending.current = null; }, []);
+  useEffect(() => { mounted.current = true; active.current = true; return () => { mounted.current = false; active.current = false; pending.current = null; }; }, []);
+  useEffect(() => {
+    if (session.error) showToast({ kind: 'error', title: 'Session unavailable', body: session.error });
+  }, [session.error, showToast]);
   useFocusEffect(useCallback(() => { active.current = true; return () => { active.current = false; }; }, []));
 
   const back = useCallback(() => {
     if (busy.current) return;
     Keyboard.dismiss();
     if (step !== 'identifier') {
-      setPassword(''); setChallenge(null); setErrors({}); setSaveError(null);
+      setPassword(''); setChallenge(null); setErrors({}); setLimit(null); pending.current = null;
       setDir(-1); setStep('identifier');
       return;
     }
@@ -52,97 +61,149 @@ export function LoginScreen() {
     const e = validateLogin(identifier, '');
     const only: Record<string, string> = e.identifier ? { identifier: e.identifier } : {};
     setErrors(only);
+    if (e.identifier) showToast({ kind: 'error', title: 'Check your details', body: e.identifier });
     return !e.identifier;
   };
 
   const goTo = (next: Step) => {
     if (busy.current || !checkIdentifier()) return;
-    Keyboard.dismiss(); setSaveError(null);
+    Keyboard.dismiss();
     setDir(1); setStep(next);
   };
 
-  const open = async () => {
-    if (busy.current) return;
-    Keyboard.dismiss();
-    busy.current = true; setSaving(true); setSaveError(null);
+  const shakeCode = () => Animated.sequence([10, -10, 7, -7, 0].map(toValue =>
+    Animated.timing(shake, { toValue, duration: 65, useNativeDriver: true }))).start();
+  const reportFailure = (error: unknown) => {
+    showToast({ kind: 'error', title: 'Login failed', body: error instanceof Error ? error.message : 'Please try again.' });
+    if (challenge) {
+      setPassword(''); setErrors({ password: 'Code rejected' });
+      shakeCode();
+    }
+  };
+
+  const perform = async (attempt: () => Promise<any>) => {
     try {
-      let result;
-      if (step === 'passkey') {
-        const identity = identifier.includes('@') ? { email: identifier.trim() } : { username: identifier.trim() };
-        const options = await authApi.passkeyLoginOptions(identity);
-        const credential = await getCredential(options);
-        result = await authApi.passkeyLoginVerify({ ...credential, ...identity });
-      } else if (challenge) {
-        result = challenge.kind === 'verify-email'
-          ? await authApi.verifyEmail(challenge.email!, password)
-          : challenge.kind === 'twofa'
-          ? await authApi.verify2FA(challenge.userId, password)
-          : await authApi.verifySuspiciousLogin(challenge.userId, password);
-      } else {
-        result = await authApi.login(identifier.trim(), password);
-      }
+      const result = await attempt();
+      if (!active.current) return;
       if (result.require2FA || result.requireEmailVerification) {
+        pending.current = null;
         setChallenge({ kind: result.require2FA ? 'twofa' : 'email', userId: result.userId });
+        setStep('password');
         setPassword('');
-        setSaveError(result.message);
+        showToast({ kind: 'info', title: 'Verification required', body: result.message || 'Enter your verification code.' });
         return;
       }
+      if (typeof result.token !== 'string' || !result.token) throw new Error('The backend did not return an authenticated session.');
       await completeLogin(result.token);
       if (!active.current) return;
       clear();
       router.replace('/');
     } catch (error) {
+      if (!active.current) return;
       if (error instanceof ApiError && error.data.code === 'USER_BLOCKED') {
         clear();
         router.replace('/account-banned');
       } else if (error instanceof ApiError && error.data.code === 'EMAIL_NOT_VERIFIED') {
+        pending.current = null;
         setChallenge({ kind: 'verify-email', userId: String(error.data.userId), email: String(error.data.email) });
         setPassword('');
         try {
           await authApi.resendOtp(String(error.data.email));
-          setSaveError('Enter the verification code sent to your email.');
+          if (active.current) showToast({ kind: 'info', title: 'Verification required', body: 'Enter the code sent to your email.' });
         } catch (cause) {
-          setSaveError(cause instanceof Error ? cause.message : 'Could not send the email code. Go back and retry sign-in.');
+          if (active.current) reportFailure(cause);
         }
-      } else if (active.current) setSaveError(error instanceof Error ? error.message : 'Login failed. Please retry.');
-    } finally {
-      busy.current = false;
-      if (active.current) setSaving(false);
+      } else {
+        try {
+          const recovery = readSessionLimit(error as ApiError);
+          if (recovery) { pending.current = attempt; setLimit(recovery); return; }
+        } catch (cause) { pending.current = null; reportFailure(cause); return; }
+        pending.current = null;
+        reportFailure(error);
+      }
     }
   };
 
+  const open = async () => {
+    if (busy.current || limit) return;
+    Keyboard.dismiss();
+    busy.current = true; setSaving(true);
+    const attempt = async () => {
+      if (step === 'passkey') {
+        const identity = identifier.includes('@') ? { email: identifier.trim() } : { username: identifier.trim() };
+        const options = await authApi.passkeyLoginOptions(identity);
+        const credential = await getCredential(options);
+        return authApi.passkeyLoginVerify({ ...credential, ...identity });
+      }
+      if (challenge) {
+        return challenge.kind === 'verify-email' ? authApi.verifyEmail(challenge.email!, password)
+          : challenge.kind === 'twofa' ? authApi.verify2FA(challenge.userId, password)
+          : authApi.verifySuspiciousLogin(challenge.userId, password);
+      }
+      return authApi.login(identifier.trim(), password);
+    };
+    try { await perform(attempt); } finally {
+      busy.current = false;
+      if (mounted.current) setSaving(false);
+    }
+  };
+
+  const closeLimit = () => {
+    if (busy.current) return;
+    setLimit(null); pending.current = null; setPassword('');
+  };
+  const removeSession = async (id: string) => {
+    const attempt = pending.current;
+    if (busy.current || !attempt || !limit?.sessions.some(item => item.id === id)) return;
+    busy.current = true; setSaving(true); setRemoving(id);
+    try {
+      await authApi.removeSessionManaged(id, limit.token);
+      if (!active.current) return;
+      setLimit(null);
+      await perform(attempt);
+    } catch (error) {
+      if (active.current) {
+        if (error instanceof ApiError && error.status === 401) {
+          setLimit(null); pending.current = null; setPassword('');
+        }
+        reportFailure(error);
+      }
+    } finally {
+      busy.current = false;
+      if (mounted.current) { setSaving(false); setRemoving(null); }
+    }
+  };
   const submit = () => {
     if (busy.current) return;
     const e = challenge
       ? (/^\d{6}$/.test(password) ? {} : { password: 'Enter the six-digit verification code.' })
       : validateLogin(identifier, password);
     setErrors(e);
-    if (Object.keys(e).length) { if (e.identifier) { setDir(-1); setStep('identifier'); } return; }
+    if (Object.keys(e).length) {
+      showToast({ kind: 'error', title: 'Check your details', body: Object.values(e)[0] });
+      if (challenge) shakeCode();
+      if (e.identifier) { setDir(-1); setStep('identifier'); } return;
+    }
     return open();
   };
 
-  const err = saveError ?? (session.error && !saving ? session.error : null);
   const edit = (set: (v: string) => void, key: string) => (v: string) => {
     set(v); if (errors[key]) setErrors(p => { const n = { ...p }; delete n[key]; return n; });
   };
-  const errText = !!err && step !== 'identifier' &&
-    <Text accessibilityRole="alert" style={[s.error, { color: c.walletError, textAlign: 'center' }]}>{err}</Text>;
   const disabled = saving || session.pending;
 
   const footer = step === 'identifier' ? <>
     <PrimaryButton testID="login-next" label="Next" onPress={() => goTo('password')} />
     <PrimaryButton testID="login-passkey" variant="ghost" label="Login with passkey" onPress={() => goTo('passkey')} />
   </> : step === 'password' ? <>
-    {errText}
-    <PrimaryButton testID="login-submit" label={saving ? 'Opening…' : err ? 'Retry' : 'Login'} disabled={disabled} onPress={submit} />
+    <PrimaryButton testID="login-submit" label={challenge ? 'Verify code' : 'Login'} loading={saving} disabled={disabled} onPress={submit} />
   </> : <>
-    {errText}
-    <PrimaryButton testID="login-passkey-confirm" label={saving ? 'Opening…' : err ? 'Retry' : 'Confirm passkey'} disabled={disabled} onPress={open} />
+    <PrimaryButton testID="login-passkey-confirm" label="Confirm passkey" loading={saving} disabled={disabled} onPress={open} />
     <PrimaryButton testID="login-passkey-cancel" variant="ghost" label="Cancel" disabled={saving} onPress={back} />
   </>;
 
   return (
-    <Shell testID="login-screen" backID="login-back" backLabel={step === 'identifier' ? 'Back to welcome' : 'Previous step'} onBack={back} footer={footer}>
+    <><Shell testID="login-screen" backID="login-back" backLabel={step === 'identifier' ? 'Back to welcome' : 'Previous step'} onBack={back} footer={footer}>
       <Progress step={step === 'identifier' ? 1 : 2} total={2} />
       <StepTransition testID={`login-step-${step}`} stepKey={step} dir={dir}>
         {step === 'identifier' && <React.Fragment key="identifier">
@@ -154,8 +215,11 @@ export function LoginScreen() {
         </React.Fragment>}
         {step === 'password' && <React.Fragment key="password">
           <Heading eyebrow="Step 2 of 2" title={challenge ? 'Enter your verification code' : 'Enter your password'} body={challenge ? (challenge.kind === 'twofa' ? 'Use the current code from your authenticator.' : 'Use the code sent to your account email.') : `Logging in as ${identifier.trim()}. Use 8 to 128 characters.`} />
-          <PasswordField testID="login-password" label={challenge ? 'Verification code' : 'Password'} value={password} onChangeText={edit(setPassword, 'password')}
-            error={errors.password} returnKeyType="done" onSubmitEditing={submit} />
+          <Animated.View style={{ transform: [{ translateX: shake }] }}>
+            <PasswordField testID="login-password" label={challenge ? 'Verification code' : 'Password'} value={password} onChangeText={edit(setPassword, 'password')}
+              error={errors.password} keyboardType={challenge ? 'number-pad' : 'default'} maxLength={challenge ? 6 : 128}
+              returnKeyType="done" onSubmitEditing={submit} />
+          </Animated.View>
           <Notice icon="lock" text="Your credentials are sent securely for verification. Your password is not saved on this device." />
         </React.Fragment>}
         {step === 'passkey' && <React.Fragment key="passkey">
@@ -163,6 +227,6 @@ export function LoginScreen() {
           <Notice icon="key" text="Your device or browser will ask you to verify with a registered passkey. AtherChain verifies the signed response." />
         </React.Fragment>}
       </StepTransition>
-    </Shell>
+    </Shell><SessionLimitSheet limit={limit} removing={removing} onRemove={removeSession} onClose={closeLimit} /></>
   );
 }

@@ -8,6 +8,8 @@ import {
 } from '@simplewebauthn/server';
 import { env } from '../config/env';
 import redis from '../db/redis';
+import { randomUUID } from 'node:crypto';
+import { getSessionRecovery } from '../services/sessionRecovery';
 
 // Human-readable title for your website
 const rpName = 'Ather Network';
@@ -307,15 +309,24 @@ export const PasskeyController = {
                 await redis.del(`challenge:${user.id}`);
 
                 // Generate JWT (Login Success)
+                const recovery = await getSessionRecovery(user);
+                if (recovery) return res.status(403).json(recovery);
                 const { default: jwt } = await import('jsonwebtoken');
+                const sessionId = randomUUID();
                 const token = jwt.sign(
-                    { id: user.id, role: user.role },
+                    { id: user.id, role: user.role, sessionId },
                     env.JWT_SECRET,
                     { expiresIn: '7d' }
                 );
 
                 // Cache session
-                await redis.set(`session:${user.id}`, token, 'EX', 7 * 24 * 60 * 60);
+                await redis.hmset(`session:${sessionId}`, {
+                    device: req.headers['user-agent'] || 'Unknown Device',
+                    ip: String(req.ip || req.socket.remoteAddress || 'Unknown IP'),
+                    location: 'Unknown', loginTime: new Date().toISOString(), lastActive: new Date().toISOString(),
+                });
+                await redis.expire(`session:${sessionId}`, 7 * 24 * 60 * 60);
+                await redis.sadd(`user_sessions:${user.id}`, sessionId);
 
                 res.json({ verified: true, token, user: { id: user.id, username: user.username, role: user.role } });
             } else {

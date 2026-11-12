@@ -4,6 +4,9 @@ import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { financialRequest, clearEligibleMiningRequest } from './financialRequests';
 import { refreshBackendData } from './refresh';
+import { getApiBaseUrl } from '../constants/apiConfig';
+
+export { getApiBaseUrl } from '../constants/apiConfig';
 
 const TOKEN_KEY = 'ather_token';
 const DEVICE_KEY = 'ather_device_id';
@@ -40,14 +43,6 @@ export async function getDeviceId() {
     await AsyncStorage.setItem(DEVICE_KEY, id);
   }
   return id;
-}
-
-export function getApiBaseUrl() {
-  const configured = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
-  if (configured) return configured;
-  // Preserve the real endpoint used by Expo Old, not a localhost guess.
-  if (Platform.OS === 'web') return '/api';
-  return 'https://api.atherchain.com';
 }
 
 export async function request<T = any>(path: string, options: {

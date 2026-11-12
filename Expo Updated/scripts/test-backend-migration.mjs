@@ -21,7 +21,8 @@ function load(relative, dependencies, globals = {}) {
   return exports;
 }
 
-function apiHarness({ platform = 'web', response, token = 'test-token', timer } = {}) {
+function apiHarness({ platform = 'web', response, token = 'test-token', timer,
+  env = { EXPO_PUBLIC_API_URL: platform === 'web' ? '/api' : 'https://backend.test' } } = {}) {
   const storage = new Map(token ? [['ather_token', token]] : []);
   const secure = new Map(token ? [['ather_token', token]] : []);
   const calls = [];
@@ -48,8 +49,11 @@ function apiHarness({ platform = 'web', response, token = 'test-token', timer } 
       '@react-native-async-storage/async-storage': asyncStorage, 'expo-crypto': crypto,
     }, { atob }),
     './refresh': { refreshBackendData() {} },
+    '../constants/apiConfig': load('../constants/apiConfig.ts', {
+      'react-native': { Platform: { OS: platform } },
+    }, { process: { env } }),
   }, {
-    process: { env: {} },
+    process: { env },
     ...(timer ? { setTimeout: timer } : {}),
     fetch: async (url, options) => {
       calls.push({ url, ...options });
@@ -71,12 +75,36 @@ function apiHarness({ platform = 'web', response, token = 'test-token', timer } 
   return { api, calls, storage, secure };
 }
 
-test('authenticated requests use the same-origin proxy and bearer token', async () => {
+test('configured requests use the same-origin proxy and bearer token', async () => {
   const { api, calls } = apiHarness();
   await api.walletApi.stats();
   assert.equal(calls[0].url, '/api/wallet/stats');
   assert.equal(calls[0].headers.Authorization, 'Bearer test-token');
   assert.equal(calls[0].method, 'GET');
+});
+
+test('web and native requests use the configured API URL rather than an old fallback', async () => {
+  for (const platform of ['web', 'ios', 'android']) {
+    const { api, calls } = apiHarness({ platform, env: { EXPO_PUBLIC_API_URL: ' https://configured.test/v1/// ' } });
+    await api.userApi.me();
+    assert.equal(calls[0].url, 'https://configured.test/v1/user/me');
+  }
+});
+
+test('missing API configuration fails explicitly without sending a request', async () => {
+  for (const value of [undefined, '', '   ']) {
+    const { api, calls } = apiHarness({ env: { EXPO_PUBLIC_API_URL: value } });
+    await assert.rejects(api.userApi.me(), /Set EXPO_PUBLIC_API_URL/);
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('invalid API URLs are rejected and native apps cannot use a relative web proxy', async () => {
+  for (const value of ['ftp://backend.test', 'https://user:password@backend.test', 'https://backend.test?token=value', 'https://backend.test#fragment', 'not-a-url', '/api']) {
+    const { api, calls } = apiHarness({ platform: 'android', env: { EXPO_PUBLIC_API_URL: value } });
+    await assert.rejects(api.userApi.me(), /full HTTP\(S\) backend URL/);
+    assert.equal(calls.length, 0);
+  }
 });
 
 test('public login sends actual credentials and no stale bearer token', async () => {

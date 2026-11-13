@@ -30,7 +30,7 @@ export class WalletService {
         }
         const operation = await runOperation(actorId!, `transfer:${type}`, key, { senderId, recipient, amount: amountText }, async (client, id) => {
             const senderResult = senderId
-                ? await client.query('SELECT is_blocked,is_transfer_enabled,transfer_paused FROM users WHERE id=$1', [senderId])
+                ? await client.query('SELECT is_blocked,is_transfer_enabled,transfer_paused,username FROM users WHERE id=$1', [senderId])
                 : null;
             if (type === 'send') {
                 const sender = senderResult?.rows[0];
@@ -76,13 +76,23 @@ export class WalletService {
             // This is part of the durable outbox event, including idempotent recovery.
             const method = recipient === addresses.get(recipientId!) || /^[0-9a-f-]{36}$/i.test(recipient)
                 ? 'address' : recipient.includes('@') ? 'email' : 'username';
+            const senderUsername = senderResult?.rows[0]?.username;
+            const metadata = {
+                recipient: { method, value: method === 'username' ? `@${recipient}` : recipient },
+                // A public handle identifies the sender of contact-based transfers.
+                // Do not disclose the sender's email just because the recipient used email.
+                sender: method !== 'address' && senderUsername
+                    ? { method: 'username', value: `@${String(senderUsername).replace(/^@/, '')}` }
+                    : { method: 'address', value: base.fromAddress },
+            };
             if (senderId) events.push({ collection: 'transactions', document: {
                 ...base, _id: new Types.ObjectId().toHexString(), userId: senderId, txHash: hash, type,
-                metadata: { recipient: { method, value: method === 'username' ? `@${recipient}` : recipient } }
+                metadata,
             } });
             if (recipientId) events.push({ collection: 'transactions', document: {
                 ...base, _id: new Types.ObjectId().toHexString(), userId: recipientId, txHash: `${hash}_RCV`,
-                type: senderId ? (type === 'send' ? 'receive' : type) : 'system_credit'
+                type: senderId ? (type === 'send' ? 'receive' : type) : 'system_credit',
+                ...(senderId && type === 'send' ? { metadata } : {}),
             } });
             return { value: { success: true, message: 'Transfer successful', hash, fee: '0.00' }, events };
         });

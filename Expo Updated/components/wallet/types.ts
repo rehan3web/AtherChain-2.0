@@ -20,8 +20,10 @@ export type Transaction = {
   reference?: string;
   status?: string;
   currency?: 'AT' | 'ATH';
-  /** Retain a demo transfer's original recipient for its history receipt. */
+  /** Counterparty shown on the receipt (sender for incoming transfers). */
   recipient?: TransferRecipient;
+  /** Original destination and method, separate from the incoming sender. */
+  receivedRecipient?: TransferRecipient;
   /** Image URI / any node. Falls back to an arrow icon */
   icon?: ReactNode;
 };

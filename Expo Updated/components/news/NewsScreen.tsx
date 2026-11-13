@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { NewsPost } from './NewsPost';
 import type { NewsItem } from './posts';
 import { newsApi, getMediaUrl } from '@/services/api';
+import { newsMediaPath } from '@/services/newsMedia';
 import { useBackendResource } from '@/hooks/useBackendResource';
 import { CACHE_POLICIES } from '@/services/cache';
 import { useToast } from '@/components/toast/ToastProvider';
@@ -28,7 +29,7 @@ export function NewsScreen() {
         const imageUrl = typeof post.image_url === 'string' ? post.image_url.trim() : '';
         return {
         id: String(post.id), title: post.title, description: post.description,
-        category: 'News', image: imageUrl ? { uri: getMediaUrl(imageUrl) } : undefined,
+        category: 'News', image: imageUrl ? { uri: getMediaUrl(newsMediaPath(imageUrl)) } : undefined,
         imageDescription: post.title,
         };
       }));

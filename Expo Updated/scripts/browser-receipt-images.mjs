@@ -16,6 +16,12 @@ const tx = (id, type, amount, metadata = {}) => ({ id, type, amount, metadata,
   timestamp: '2026-11-13T12:00:00Z', txHash: `fixture-${id}`, status: 'completed',
   fromAddress: `ATH_${'a'.repeat(40)}`, toAddress: `ATH_${'b'.repeat(40)}` });
 const history = [
+  ...['username', 'email', 'address'].map(method => tx(`fixture-receive-${method}`, 'receive', '2.50', {
+    recipient: { method, value: method === 'username' ? '@fixture_receiver'
+      : method === 'email' ? 'receiver@example.test' : `ATH_${'b'.repeat(40)}` },
+    sender: method === 'address' ? { method: 'address', value: `ATH_${'a'.repeat(40)}` }
+      : { method: 'username', value: '@fixture_sender' },
+  })),
   tx('fixture-send', 'send', '2.50', { recipient: { method: 'username', value: '@fixture_friend' } }),
   tx('fixture-swap', 'swap', '3', { fromAmount: 3, toAmount: 3, rate: 1 }),
 ];
@@ -40,6 +46,7 @@ ws.addEventListener('message', async ({ data }) => {
     body = { id: 'fixture-user', username: 'fixture_user', first_name: 'Fixture', last_name: 'User',
       twofa_enabled: true, at_balance: '100', kyc_status: 'approved' };
   } else if (path === '/transactions') body = { data: history, meta: { totalPages: 1, currentPage: 1 } };
+  else if (path === '/wallet/stats') body = { ath_balance: '100' };
   else if (path === '/auth/sessions') {
     await sleep(700);
     body = { sessions: [{ id: 'fixture-session', device: 'Fixture browser', loginTime: '2026-11-13T12:00:00Z', isCurrent: true }] };
@@ -86,8 +93,17 @@ async function navigate(path) {
 }
 async function verifyImage(type) {
   await click(`txn-history-row-fixture-${type}`);
-  const prefix = type === 'send' ? 'wallet-send' : 'wallet-swap';
+  const isSwap = type === 'swap';
+  const prefix = isSwap ? 'wallet-swap' : 'wallet-send';
   await wait(`${prefix}-receipt-image`);
+  if (type.startsWith('receive-')) {
+    const method = type.replace('receive-', '');
+    const saved = history.find(row => row.id === `fixture-${type}`).metadata;
+    const value = id => evaluate(`${query(id)}.textContent`);
+    assert.equal(await value('wallet-send-receipt-method-value'), { username: 'Username', email: 'Email', address: 'Address' }[method]);
+    assert.equal(await value('wallet-send-receipt-counterparty-value'), saved.sender.value);
+    assert.equal(await value('wallet-send-receipt-receiver-value'), saved.recipient.value);
+  }
   await sleep(500); // Let the receipt modal finish its entrance animation.
   await evaluate('document.fonts.ready');
   if (process.argv.includes('--debug-fonts')) console.log(type, await evaluate(`({
@@ -100,7 +116,7 @@ async function verifyImage(type) {
   const screenshot = await send('Page.captureScreenshot', { format: 'png' });
   await fs.writeFile(`generated-artifacts/receipt-browser/${type}-screen.png`, Buffer.from(screenshot.data, 'base64'));
   await evaluate('window.__sharedReceipt = null');
-  await click(type === 'send' ? 'wallet-send-receipt-share' : 'wallet-receipt-share');
+  await click(isSwap ? 'wallet-receipt-share' : 'wallet-send-receipt-share');
   let image;
   for (let attempt = 0; attempt < 160; attempt++) {
     image = await evaluate('window.__sharedReceipt');
@@ -117,7 +133,7 @@ async function verifyImage(type) {
   assert.ok(size.height > visibleHeight, `Expected the full scrollable ${type} receipt, got ${size.height} within ${visibleHeight}`);
   await fs.writeFile(`generated-artifacts/receipt-browser/${type}.png`, png);
   console.log(`${type}: verified full PNG ${png.readUInt32BE(16)}×${png.readUInt32BE(20)}, ${png.length} bytes`);
-  await click(type === 'send' ? 'wallet-send-receipt-close' : 'wallet-receipt-close');
+  await click(isSwap ? 'wallet-receipt-close' : 'wallet-send-receipt-close');
 }
 try {
   await fs.mkdir('generated-artifacts/receipt-browser', { recursive: true });
@@ -125,6 +141,15 @@ try {
   await wait('txn-history-row-fixture-send');
   await verifyImage('send');
   await verifyImage('swap');
+  for (const method of ['username', 'email', 'address']) await verifyImage(`receive-${method}`);
+  await navigate('/wallet');
+  await click('wallet-transaction-fixture-receive-username');
+  await wait('wallet-send-receipt-image');
+  assert.equal(await evaluate(`${query('wallet-send-receipt-method-value')}.textContent`), 'Username');
+  assert.equal(await evaluate(`${query('wallet-send-receipt-counterparty-value')}.textContent`), '@fixture_sender');
+  assert.equal(await evaluate(`${query('wallet-send-receipt-receiver-value')}.textContent`), '@fixture_receiver');
+  await click('wallet-send-receipt-close');
+  console.log('Wallet history: received username receipt retained both identities');
   for (const [path, loading, ready, forbidden] of [
     ['/twofa', 'twofa-loading', 'twofa-disable', 'twofa-enable'],
     ['/sessions', 'sessions-loading', 'sessions-sign-out-fixture-session', 'sessions-empty'],

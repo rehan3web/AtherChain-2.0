@@ -9,6 +9,7 @@ export function transactionReceipt(transaction: Transaction, locale: string): Se
     recipient: transaction.recipient
       ? { ...transaction.recipient }
       : { method: 'username', value: transaction.title },
+    receivedRecipient: transaction.receivedRecipient ? { ...transaction.receivedRecipient } : undefined,
     note: '',
     reference: transaction.reference ?? transaction.id,
     createdAt: Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleString(locale),

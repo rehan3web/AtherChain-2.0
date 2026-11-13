@@ -9,6 +9,7 @@ import { SEND_METHOD_LABELS, SendDetail, type SendDraft } from './SendConfirmati
 import { formatReceiptAmount, type Money } from './format';
 import { ToastSurface, useToast } from '@/components/toast/ToastProvider';
 import { useReceiptImage } from '@/hooks/useReceiptImage';
+import type { TransferRecipient } from './types';
 
 export type SendReceiptData = SendDraft & {
   reference: string; createdAt: string; demo: boolean;
@@ -16,6 +17,7 @@ export type SendReceiptData = SendDraft & {
   transactionTitle?: string;
   methodLabel?: string;
   status?: string;
+  receivedRecipient?: TransferRecipient;
 };
 
 export function SendReceipt({ receipt, money, onClose }: { receipt: SendReceiptData; money: Money; onClose: () => void }) {
@@ -70,8 +72,9 @@ export function SendReceipt({ receipt, money, onClose }: { receipt: SendReceiptD
                 <Text selectable testID="wallet-send-reference" style={[styles.referenceText, { color: c.walletInk }]}>{receipt.reference}</Text>
                 {(copied || copyError) && <Text testID="wallet-send-reference-feedback" accessibilityLiveRegion="polite" style={[styles.note, { color: copyError ? c.walletError : c.walletSubtle }]}>{copyError ? 'Could not copy. Try again.' : 'Reference copied'}</Text>}
               </View>
-              <SendDetail testID="wallet-send-receipt-method" label={received ? 'Received via' : 'Send via'} value={receipt.methodLabel ?? SEND_METHOD_LABELS[receipt.recipient.method]} />
+              <SendDetail testID="wallet-send-receipt-method" label={received ? 'Received via' : 'Send via'} value={receipt.methodLabel ?? SEND_METHOD_LABELS[received && receipt.receivedRecipient ? receipt.receivedRecipient.method : receipt.recipient.method]} />
               <SendDetail testID="wallet-send-receipt-counterparty" label={received ? 'Sender' : 'Receiver'} value={receipt.recipient.value} />
+              {received && receipt.receivedRecipient && <SendDetail testID="wallet-send-receipt-receiver" label="Receiver" value={receipt.receivedRecipient.value} />}
               <SendDetail testID="wallet-send-receipt-amount-row" label="Amount" value={amount} />
               <SendDetail testID="wallet-send-receipt-footer-last-row" label="Fee" value="0" last />
             </View>

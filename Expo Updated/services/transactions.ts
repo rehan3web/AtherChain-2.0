@@ -25,23 +25,30 @@ export async function getAllTransactions(): Promise<BackendTransaction[]> {
   return transactions;
 }
 
+function savedIdentity(value: any): TransferRecipient | undefined {
+  return value && ['username', 'email', 'address'].includes(value.method) &&
+    typeof value.value === 'string' && !recipientError(value.method, value.value)
+    ? normalizeRecipient(value.method, value.value) : undefined;
+}
+
 export function walletTransaction(item: BackendTransaction): Transaction {
   const incoming = ['receive', 'mining', 'referral', 'claim'].includes(item.type);
   const amount = Number(item.amount);
   const date = new Date(item.timestamp);
   if (!Number.isFinite(amount) || !Number.isFinite(date.getTime()))
     throw new Error('The backend returned an invalid transaction amount or date.');
-  const savedRecipient = item.metadata?.recipient;
-  const recipient: TransferRecipient = !incoming && savedRecipient &&
-    ['username', 'email', 'address'].includes(savedRecipient.method) &&
-    typeof savedRecipient.value === 'string' && !recipientError(savedRecipient.method, savedRecipient.value)
-    ? normalizeRecipient(savedRecipient.method, savedRecipient.value)
-    : { method: 'address', value: incoming ? item.fromAddress ?? '' : item.toAddress ?? '' };
+  const savedRecipient = savedIdentity(item.metadata?.recipient);
+  const receivedRecipient = item.type === 'receive' ? savedRecipient : undefined;
+  const recipient: TransferRecipient = incoming
+    ? (receivedRecipient ? savedIdentity(item.metadata?.sender) : undefined)
+      ?? { method: 'address', value: item.fromAddress ?? '' }
+    : savedRecipient ?? { method: 'address', value: item.toAddress ?? '' };
   return {
     id: String(item.id), title: item.type === 'mining' ? 'Mining claimed'
       : item.type === 'swap' ? 'AT to ATH' : incoming ? 'Received' : 'Sent',
     amount: incoming ? amount : -amount, date,
     recipient,
+    receivedRecipient,
     reference: item.txHash, status: item.status,
     currency: item.type === 'mining' || item.type === 'referral' ? 'AT' : 'ATH',
   };
@@ -52,6 +59,7 @@ export function backendReceipt(item: BackendTransaction): SendReceiptData {
   return {
     amount: Math.abs(transaction.amount),
     recipient: transaction.recipient!,
+    receivedRecipient: transaction.receivedRecipient,
     note: '', reference: item.txHash || String(item.id),
     createdAt: new Date(item.timestamp).toLocaleString('en-US'),
     demo: false, direction: transaction.amount >= 0 ? 'received' : 'sent',

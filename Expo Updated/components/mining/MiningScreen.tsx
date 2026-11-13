@@ -151,12 +151,6 @@ export default function MiningScreen() {
           )}
         </LinearGradient>
 
-        {boosts > 0 ? (
-          <View accessibilityLiveRegion="polite" style={[tw`w-full mt-4 flex-row items-center gap-2 px-3 py-2 rounded-[10px]`, { maxWidth: 380, backgroundColor: c.miningNotice }]}>
-            <Feather name="info" size={13} color={c.miningNoticeInk} />
-            <Text style={[tw`flex-1 text-[11px]`, { color: c.miningNoticeInk, fontFamily: F.m }]}>Boost rewards and availability are controlled by the server.</Text>
-          </View>
-        ) : null}
         {error && s ? (
           <Text accessibilityLiveRegion="polite" style={[tw`text-xs text-center mt-3`, { color: c.walletError, fontFamily: F.r }]}>{error}</Text>
         ) : null}

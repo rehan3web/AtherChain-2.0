@@ -17,9 +17,13 @@ test('send history persists username, email or address method through delivery a
         const first = await service.transfer('sender', identifier, 2, 'send', 'ATH', key);
         const event = h.db.state.operations[0].events[0].document;
         assert.deepEqual(event.metadata.recipient, { method, value });
-        assert.equal(h.db.state.operations[0].events[1].document.metadata, undefined);
+        const receiver = h.db.state.operations[0].events[1].document;
+        assert.deepEqual(receiver.metadata.recipient, { method, value });
+        assert.deepEqual(receiver.metadata.sender, method === 'address'
+            ? { method: 'address', value: 'ATH_SENDER' } : { method: 'username', value: '@sender' });
         await h.load('src/services/ledgerHistory.ts').flushLedgerHistory();
         assert.deepEqual([...h.mongo.transactions.values()].find(tx => tx.userId === 'sender').metadata.recipient, { method, value });
+        assert.deepEqual([...h.mongo.transactions.values()].find(tx => tx.userId === 'receiver').metadata, receiver.metadata);
         const replay = await service.transfer('sender', identifier, 2, 'send', 'ATH', key);
         assert.equal(first.hash, replay.hash);
         assert.equal(h.db.state.wallets.sender.balance_ath, '98.00000000');

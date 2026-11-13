@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { query } from '../db/postgres';
 import Transaction from '../models/Transaction';
+import { receivedTransferMetadata } from '../services/receivedTransferMetadata';
 
 export const getTransactions = async (req: Request | any, res: Response) => {
     try {
@@ -30,6 +31,7 @@ export const getTransactions = async (req: Request | any, res: Response) => {
             .skip((page - 1) * limit)
             .limit(limit);
 
+        const recovered = await receivedTransferMetadata(txs);
         // Map to JSON friendly format
         const transactions = txs.map(row => ({
             id: row._id,
@@ -41,7 +43,7 @@ export const getTransactions = async (req: Request | any, res: Response) => {
             fromAddress: row.fromAddress,
             toAddress: row.toAddress,
             fee: row.fee,
-            metadata: row.metadata
+            metadata: recovered.get(row.txHash) ?? row.metadata
         }));
 
         res.json({

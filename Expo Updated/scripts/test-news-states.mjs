@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { load, hooks, byId, byType, nodes } from './auth-test-utils.mjs';
+const newsMedia = load('../services/newsMedia.ts');
 
 function screen(list = async () => ({ posts: [] })) {
   const h = hooks(), media = [];
@@ -17,6 +18,7 @@ function screen(list = async () => ({ posts: [] })) {
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     '@/hooks/useColors': { useColors: () => ({}) }, './NewsPost': { NewsPost: 'NewsPost' },
     '@/services/api': { newsApi: { list }, getMediaUrl: value => { media.push(value); return `https://example.test${value}`; } },
+    '@/services/newsMedia': newsMedia,
     '@/hooks/useBackendResource': { useBackendResource: callback => { loader = callback; return resource; } },
     '@/components/toast/ToastProvider': { useToast: () => ({ showToast() {} }) },
     '@/components/KeyboardAwareScrollViewCompat': { KeyboardAwareScrollViewCompat: 'Scroll' },
@@ -62,6 +64,28 @@ test('news mapping omits missing, null, empty and whitespace images without drop
   assert.ok(app.resource.data.slice(0, 4).every(post => post.image === undefined));
   assert.equal(app.resource.data[4].image.uri, 'https://example.test/news/photo.jpg');
   assert.deepEqual(app.media, ['/news/photo.jpg']);
+});
+test('admin-uploaded news filenames and server-relative upload URLs resolve to the news uploads directory', async () => {
+  const app = screen(async () => ({ posts: [
+    { id: 1, image_url: 'news-1794560000000-123456789.png' },
+    { id: 2, image_url: 'uploads/news/news-456.jpg' },
+    { id: 3, image_url: ' news photo.webp ' },
+  ] }));
+  await app.resource.reload();
+  assert.equal(app.resource.error, null);
+  assert.equal(app.resource.data[0].image.uri, 'https://example.test/uploads/news/news-1794560000000-123456789.png');
+  assert.equal(app.resource.data[1].image.uri, 'https://example.test/uploads/news/news-456.jpg');
+  assert.equal(app.resource.data[2].image.uri, 'https://example.test/uploads/news/news%20photo.webp');
+});
+test('existing absolute and root-relative news image URLs retain their paths and cache query parameters', () => {
+  for (const path of ['https://cdn.example.test/news/photo.png?v=2', '/uploads/news/photo.jpg?v=3']) {
+    assert.equal(newsMedia.newsMediaPath(` ${path} `), path);
+  }
+});
+test('local picker URLs, unsupported schemes and arbitrary relative paths are not treated as uploaded news filenames', () => {
+  for (const path of ['blob:temporary', 'javascript:alert(1)', 'file:///phone/image.png', '../private.png', 'other/file.png', '', '.', '..']) {
+    assert.throws(() => newsMedia.newsMediaPath(path), /invalid news image URL/);
+  }
 });
 function postFixture(image) {
   const h = hooks();

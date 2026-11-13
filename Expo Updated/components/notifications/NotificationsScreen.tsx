@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { useToast } from '@/components/toast/ToastProvider';
 import { PrimaryButton } from '@/components/kyc/parts';
 import { useNotifications, type NotificationItem } from './store';
+import { BackendScreenState } from '@/components/BackendScreenState';
 
 type IconName = React.ComponentProps<typeof Feather>['name'];
 const ICONS: Record<NotificationItem['kind'], IconName> = { info: 'info', security: 'shield', updates: 'refresh-cw' };
@@ -22,7 +23,7 @@ export function NotificationsScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { notifications, unreadCount, markRead, markAllRead, error } = useNotifications();
+  const { notifications, unreadCount, markRead, markAllRead, error, loading, reload } = useNotifications();
   const reportError = (cause: unknown) => showToast({ kind: 'error', title: 'Notifications', body: cause instanceof Error ? cause.message : String(cause) });
   useEffect(() => { if (error) showToast({ kind: 'error', title: 'Notifications', body: error }); }, [error, showToast]);
 
@@ -39,6 +40,8 @@ export function NotificationsScreen() {
   const empty = notifications.length === 0;
   const body = { fontFamily: 'DMSans_400Regular', fontSize: 15, lineHeight: 22, color: c.walletSubtle } as const;
 
+  if (loading || error) return <BackendScreenState testID="notifications-loading" error={loading ? null : error}
+    onRetry={() => { void reload(); }} onBack={back} />;
   return (
     <View testID="notifications-screen" style={{ flex: 1, backgroundColor: c.background }}>
       <View style={{ paddingTop: top, paddingHorizontal: 12 }}>
@@ -51,7 +54,7 @@ export function NotificationsScreen() {
       <ScrollView showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24, flexGrow: 1, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
         <Text accessibilityRole="header" style={{ color: c.walletInk, fontFamily: 'DMSans_700Bold', fontSize: 30, letterSpacing: -0.8 }}>Notifications</Text>
-        <Text style={[body, { marginTop: 10 }]}>Sample notifications for this app.</Text>
+        <Text style={[body, { marginTop: 10 }]}>Your account notifications and updates.</Text>
 
         {empty ? (
           <View testID="notifications-empty" style={{ marginTop: 48, alignItems: 'center', paddingHorizontal: 12 }}>

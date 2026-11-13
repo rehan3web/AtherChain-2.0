@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,8 +26,14 @@ export function StatisticsScreen() {
     <View style={s.header}>
       <Pressable testID="statistics-back" accessibilityRole="button" accessibilityLabel="Back to dashboard" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={s.back}><Feather name="arrow-left" size={24} color={c.walletInk} /></Pressable>
       <Text accessibilityRole="header" style={[s.title, { color: c.walletInk }]}>Statistics</Text>
+      {Platform.OS === 'web' && <Pressable testID="statistics-refresh-button" onPress={() => { void mining.refresh(); }}
+        disabled={mining.refreshing} accessibilityRole="button" accessibilityLabel="Refresh statistics" style={s.back}>
+        {mining.refreshing ? <ActivityIndicator color={c.walletInk} /> : <Feather name="refresh-cw" size={20} color={c.walletInk} />}
+      </Pressable>}
     </View>
-    <ScrollView testID="statistics-scroll" showsVerticalScrollIndicator={false} contentContainerStyle={[s.content, { paddingBottom: Math.max(insets.bottom, 32) }]}>
+    <ScrollView testID="statistics-scroll" showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl testID="statistics-refresh" refreshing={mining.refreshing} onRefresh={() => { void mining.refresh(); }} tintColor={c.walletInk} />}
+      contentContainerStyle={[s.content, { paddingBottom: Math.max(insets.bottom, 32) }]}>
       {mining.loading ? <View style={s.loading}><ActivityIndicator accessibilityLabel="Loading mining calendar" color={c.walletInk} /></View> : mining.error ? <View style={s.error}>
         <Text testID="statistics-error" accessibilityRole="alert" style={[s.note, { color: c.walletError }]}>{mining.error}</Text>
         <Pressable testID="statistics-retry" accessibilityRole="button" accessibilityLabel="Retry claim history" onPress={mining.retry} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={[s.value, { color: c.walletInk }]}>Try again</Text></Pressable>

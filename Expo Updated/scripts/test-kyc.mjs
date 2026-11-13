@@ -63,7 +63,7 @@ function screen(api = {}, picker = async () => photo, initialResource = {}) {
   const { KycScreen } = load('../components/kyc/KycScreen.tsx', {
     '@/components/BackendScreenState': { BackendScreenState: 'BackendScreenState' },
     react: h.react, 'react-native': h.native, '@expo/vector-icons': { Feather: 'Feather' },
-    'expo-router': { router: { canGoBack: () => false, replace: route => routes.push(route) } },
+    'expo-router': { useFocusEffect() {}, router: { canGoBack: () => false, replace: route => routes.push(route) } },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     '@/hooks/useColors': { useColors: () => ({}) }, '@/components/KeyboardAwareScrollViewCompat': { KeyboardAwareScrollViewCompat: 'Scroll' },
     '@/components/wallet/Sheet': { Sheet: 'Sheet' }, './model': model, './media': { chooseKycPhoto: picker },

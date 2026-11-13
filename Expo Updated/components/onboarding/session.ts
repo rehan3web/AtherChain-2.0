@@ -22,7 +22,7 @@ export function createDemoSessionStore(storage: Storage) {
     loading = (async () => {
       try {
         const token = await getToken();
-        if (token) await userApi.me();
+        if (token) await userApi.me({ force: true });
         publish({ ready: true, entered: !!token, error: null });
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
@@ -48,7 +48,7 @@ export function createDemoSessionStore(storage: Storage) {
       try {
         if (entered) {
           if (!await getToken()) throw new Error('Please sign in to continue.');
-          await userApi.me();
+          await userApi.me({ force: true });
         } else {
           const result = await authApi.getSessions();
           const current = result.sessions?.find((session: { isCurrent: boolean }) => session.isCurrent);

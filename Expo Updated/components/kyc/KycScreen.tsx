@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, Platform, Pressable, Text, View } from 'react-native';
+import { BackHandler, Platform, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -18,8 +18,8 @@ import { CountrySheet, LanguageSheet } from './LanguageSheet';
 import { Heading, PrimaryButton, Progress, s } from './parts';
 import { kycApi } from '@/services/api';
 import { appendImage } from '@/services/uploads';
-import { refreshBackendData } from '@/services/refresh';
 import { useBackendResource } from '@/hooks/useBackendResource';
+import { CACHE_POLICIES } from '@/services/cache';
 import { useToast } from '@/components/toast/ToastProvider';
 import { COUNTRIES } from './countries';
 import { BackendScreenState } from '@/components/BackendScreenState';
@@ -35,9 +35,13 @@ export function KycScreen() {
   const { showToast, dismissToast } = useToast();
   const failureToast = useRef<number | null>(null);
   const clearFailure = () => { if (failureToast.current !== null) dismissToast(failureToast.current); failureToast.current = null; };
-  const resource = useBackendResource(kycApi.status);
+  const resource = useBackendResource(kycApi.status, CACHE_POLICIES.kyc);
   const hydrated = useRef(false);
   const [statusReady, setStatusReady] = useState(false);
+  useFocusEffect(useCallback(() => {
+    hydrated.current = false;
+    setStatusReady(false);
+  }, []));
   useEffect(() => {
     if (hydrated.current && step !== 7) return;
     const status = resource.data?.status;
@@ -54,7 +58,6 @@ export function KycScreen() {
   const [residence, setResidence] = useState<Residence>(EMPTY_RESIDENCE);
   const [front, setFront] = useState<Photo | null>(null);
   const [back, setBack] = useState<Photo | null>(null);
-  const [foreground, setForeground] = useState(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
@@ -66,21 +69,11 @@ export function KycScreen() {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', state => setForeground(state === 'active'));
-    return () => sub.remove();
-  }, []);
-  useEffect(() => {
-    if (step !== 7 || !foreground) return;
-    const timer = setInterval(() => { void resource.reload(); }, 15000);
-    return () => clearInterval(timer);
-  }, [step, foreground, resource.reload]);
   const pendingReview = () => {
     if (!mounted.current) return;
     clearFailure();
     setReviewStatus('pending'); setStep(7);
     setPersonal(EMPTY_PERSONAL); setResidence(EMPTY_RESIDENCE); setFront(null); setBack(null);
-    refreshBackendData();
   };
   const warn = (body: string) => showToast({ kind: 'error', title: 'Identity verification', body });
   const submitFace = async (photo: FacePhoto) => {

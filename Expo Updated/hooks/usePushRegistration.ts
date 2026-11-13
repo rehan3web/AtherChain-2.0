@@ -29,8 +29,8 @@ export function usePushRegistration(signedIn: boolean) {
     };
     void register();
     const active = AppState.addEventListener('change', state => { if (state === 'active') void register(); });
-    const received = Notifications.addNotificationReceivedListener(() => refreshBackendData());
-    const opened = Notifications.addNotificationResponseReceivedListener(() => refreshBackendData());
+    const received = Notifications.addNotificationReceivedListener(() => refreshBackendData(['notifications', 'wallet', 'stats', 'transactions', 'mining', 'referral', 'profile']));
+    const opened = Notifications.addNotificationResponseReceivedListener(() => refreshBackendData(['notifications', 'wallet', 'stats', 'transactions', 'mining', 'referral', 'profile']));
     return () => { cancelled = true; active.remove(); received.remove(); opened.remove(); };
   }, [signedIn, showToast]);
 }

@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 import type { SendReceiptData } from '@/components/wallet/SendReceipt';
 import type { SwapReceiptData } from '@/components/wallet/swap-model';
 import { useBackendResource } from '@/hooks/useBackendResource';
+import { CACHE_POLICIES } from '@/services/cache';
 import { useToast } from '@/components/toast/ToastProvider';
 import { getAllTransactions, walletTransaction, backendReceipt } from '@/services/transactions';
-import { refreshBackendData } from '@/services/refresh';
 import { SWAP_COINS, swapQuote } from '@/components/wallet/swap-model';
 
 export type ActivityReceipt =
@@ -19,7 +19,7 @@ export type Activity = {
 };
 
 /** Local notifications never manufacture transaction records. */
-export function recordActivity(_activity: Activity) { refreshBackendData(); }
+export function recordActivity(_activity: Activity) { /* Successful API writes invalidate history centrally. */ }
 
 export function useActivityResource() {
   const { showToast } = useToast();
@@ -48,7 +48,7 @@ export function useActivityResource() {
         positive: transaction.amount >= 0, receipt,
       };
     });
-  });
+  }, CACHE_POLICIES.activity);
   useEffect(() => { if (resource.error) showToast({ kind: 'error', title: 'Transaction history', body: resource.error }); }, [resource.error, showToast]);
   return resource;
 }

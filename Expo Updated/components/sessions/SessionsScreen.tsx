@@ -8,6 +8,7 @@ import { Sheet } from '@/components/wallet/Sheet';
 import { useToast } from '@/components/toast/ToastProvider';
 import { PrimaryButton } from '@/components/kyc/parts';
 import { useSessions, type Session } from './store';
+import { BackendScreenState } from '@/components/BackendScreenState';
 
 type IconName = React.ComponentProps<typeof Feather>['name'];
 const ICONS: Record<Session['platform'], IconName> = { android: 'smartphone', ios: 'smartphone', web: 'globe', other: 'monitor' };
@@ -25,7 +26,7 @@ export function SessionsScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { sessions, signOutSession, signOutAll, error } = useSessions();
+  const { sessions, signOutSession, signOutAll, error, loading, reload } = useSessions();
   const submitting = useRef(false);
   useEffect(() => { if (error) showToast({ kind: 'error', title: 'Sessions', body: error }); }, [error, showToast]);
   const [confirm, setConfirm] = useState<Confirm>(null);
@@ -59,6 +60,8 @@ export function SessionsScreen() {
   const empty = sessions.length === 0;
   const body = { fontFamily: 'DMSans_400Regular', fontSize: 15, lineHeight: 22, color: c.walletSubtle } as const;
 
+  if (loading || error) return <BackendScreenState testID="sessions-loading" error={loading ? null : error}
+    onRetry={() => { void reload(); }} onBack={back} />;
   return (
     <View testID="sessions-screen" style={{ flex: 1, backgroundColor: c.background }}>
       <View style={{ paddingTop: top, paddingHorizontal: 12 }}>

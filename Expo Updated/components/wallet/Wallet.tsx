@@ -8,7 +8,7 @@ import { router } from 'expo-router';
 import { walletApi, ApiError } from '@/services/api';
 import { getAllTransactions, walletTransaction } from '@/services/transactions';
 import { useBackendResource } from '@/hooks/useBackendResource';
-import { refreshBackendData } from '@/services/refresh';
+import { CACHE_POLICIES } from '@/services/cache';
 import { useToast } from '@/components/toast/ToastProvider';
 import { BackendScreenState } from '@/components/BackendScreenState';
 
@@ -19,7 +19,7 @@ export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewSt
     const [stats, transactions] = await Promise.all([walletApi.stats(), getAllTransactions()]);
     if (!Number.isFinite(Number(stats.ath_balance))) throw new Error('The backend returned an invalid wallet balance.');
     return { stats, transactions: transactions.filter(tx => ['send', 'receive', 'transfer'].includes(tx.type)).map(walletTransaction) };
-  });
+  }, CACHE_POLICIES.wallet);
   useEffect(() => {
     if (resource.error) showToast({ kind: 'error', title: 'Wallet unavailable', body: resource.error });
   }, [resource.error, showToast]);
@@ -39,7 +39,6 @@ export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewSt
       if (req.recipient.method !== 'address') await walletApi.lookup(identifier);
       submitted = true;
       const result = await walletApi.send(identifier, req.amount);
-      refreshBackendData();
       if (!result.hash) throw new Error('The transfer response did not include a reference. Check history before retrying.');
       if (result.historyPending) showToast({ kind: 'success', title: 'Transfer completed', body: 'Your balance is updated. Transaction history is syncing.' });
       return {
@@ -49,7 +48,6 @@ export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewSt
       };
     } catch (cause) {
       if (submitted && (!(cause instanceof ApiError) || cause.status >= 500 || cause.status < 400)) {
-        refreshBackendData();
         throw new Error('The transfer result is unconfirmed. Retry the same recipient and amount to recover its receipt safely.');
       }
       throw cause;

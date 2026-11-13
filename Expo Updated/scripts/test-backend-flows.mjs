@@ -10,6 +10,7 @@ function load(file, dependencies) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true },
   }).outputText;
   vm.runInNewContext(code, { exports, require: name => {
+    if (name === '@/services/cache') return load('../services/cache.ts', {});
     assert.ok(name in dependencies, `Unexpected dependency ${name}`);
     return dependencies[name];
   } });
@@ -117,7 +118,12 @@ function walletHarness(send) {
     'expo-router': { router: { push() {} } },
     '@/services/api': { ApiError: BackendError, walletApi: {
       stats() {}, lookup: async value => { calls.push(['lookup', value]); return { address: 'destination' }; },
-      send: async (...args) => { calls.push(['send', ...args]); return send(BackendError); },
+      send: async (...args) => {
+        calls.push(['send', ...args]);
+        const result = await send(BackendError);
+        refreshes.push(true); // Successful API writes now own cache invalidation.
+        return result;
+      },
     } },
     '@/services/transactions': { getAllTransactions() {}, walletTransaction() {} },
     '@/hooks/useBackendResource': { useBackendResource: () => ({

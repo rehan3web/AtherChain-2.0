@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { swapApi, userApi, transactionApi, ApiError } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
-import { refreshBackendData } from '@/services/refresh';
+import { CACHE_POLICIES } from '@/services/cache';
 import { Animated, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -26,7 +26,7 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
   const c = useColors();
   const { showToast } = useToast();
   const resource = useBackendResource(async () => {
-    const [settings, profile] = await Promise.all([swapApi.rate(), userApi.me()]);
+    const [settings, profile] = await Promise.all([swapApi.rate(), userApi.me({ maxAge: 10_000 })]);
     if (!Number.isFinite(Number(settings.rate)) || Number(settings.rate) <= 0)
       throw new Error('The backend returned an invalid swap rate.');
     if (profile.at_balance == null || !Number.isFinite(Number(profile.at_balance)) || Number(profile.at_balance) < 0)
@@ -35,7 +35,7 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
       ? new Date(profile.next_swap_at).getTime() : 0;
     if (!Number.isFinite(cooldownUntil)) throw new Error('The backend returned an invalid swap cooldown.');
     return { rate: Number(settings.rate), balance: Number(profile.at_balance), active: settings.active === true, cooldownUntil };
-  });
+  }, CACHE_POLICIES.swap);
   const balance = resource.data?.balance ?? Number.NaN;
   const rate = resource.data?.rate;
   useEffect(() => { if (resource.error) showToast({ kind: 'error', title: 'Swap unavailable', body: resource.error }); }, [resource.error, showToast]);
@@ -105,13 +105,12 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
     let submitted = false;
     let accepted = false;
     try {
-      const latest = await swapApi.rate();
+      const latest = await swapApi.rate({ force: true });
       const agreed = quoteSnapshot.current;
       if (!agreed || Number(latest.rate) !== agreed.quote.receiveAmount / agreed.quote.amount)
         throw new Error('The swap rate changed. Close this sheet and review a new quote.');
       submitted = true;
       const result = await swapApi.execute(agreed.quote.amount);
-      refreshBackendData();
       if (result.success !== true || result.status !== 'completed' || !result.hash)
         throw new Error('The swap was not confirmed. Check transaction history before retrying.');
       accepted = true;
@@ -132,7 +131,6 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
       if (result.historyPending) showToast({ kind: 'success', title: 'Swap completed', body: 'Your receipt is saved. Transaction history is syncing.' });
     } catch (cause) {
       if (accepted || (submitted && (!(cause instanceof ApiError) || cause.status >= 500 || cause.status < 400))) {
-        refreshBackendData();
       }
       showToast({ kind: 'error', title: 'Swap failed', body: cause instanceof Error ? cause.message : 'Check history before retrying.' });
       setSwapStatus('idle');

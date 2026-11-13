@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { copyText } from '@/utils/clipboard';
@@ -8,6 +8,7 @@ import { ConfirmedIcon } from './ConfirmedIcon';
 import { SEND_METHOD_LABELS, SendDetail, type SendDraft } from './SendConfirmation';
 import { formatReceiptAmount, type Money } from './format';
 import { ToastSurface, useToast } from '@/components/toast/ToastProvider';
+import { useReceiptImage } from '@/hooks/useReceiptImage';
 
 export type SendReceiptData = SendDraft & {
   reference: string; createdAt: string; demo: boolean;
@@ -23,6 +24,7 @@ export function SendReceipt({ receipt, money, onClose }: { receipt: SendReceiptD
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const { receiptRef, sharing, shareImage } = useReceiptImage('atherchain-transfer-receipt.png');
   const received = receipt.direction === 'received';
   const amount = formatReceiptAmount(money, receipt.amount);
   const copy = async () => {
@@ -41,9 +43,14 @@ export function SendReceipt({ receipt, money, onClose }: { receipt: SendReceiptD
       <View testID="wallet-send-receipt" style={[styles.page, { backgroundColor: c.miningPage, paddingTop: (Platform.OS === 'web' ? 67 : insets.top) + 24 }]}>
         <View style={styles.header}>
           <Pressable testID="wallet-send-receipt-close" onPress={onClose} accessibilityRole="button" accessibilityLabel="Close send receipt" style={styles.button}><Feather name="x" size={24} color={c.walletInk} /></Pressable>
-          <Pressable testID="wallet-send-receipt-share" onPress={() => { void Share.share({ message: `${receipt.transactionTitle ?? 'AtherChain transaction'}\n${amount}\n${receipt.createdAt}\n${receipt.reference}` }).catch(() => showToast({ kind: 'error', title: 'Could not share receipt', body: 'Please retry.' })); }} accessibilityRole="button" accessibilityLabel="Share send receipt" accessibilityHint="Opens the share sheet" style={styles.button}><Feather name="share" size={22} color={c.walletInk} /></Pressable>
+          <Pressable testID="wallet-send-receipt-share" onPress={() => { void shareImage(); }} disabled={sharing}
+            accessibilityState={{ busy: sharing, disabled: sharing }} accessibilityRole="button" accessibilityLabel="Share send receipt image" accessibilityHint="Shares the full receipt as a PNG image" style={styles.button}>
+            {sharing ? <ActivityIndicator color={c.walletInk} /> : <Feather name="share" size={22} color={c.walletInk} />}
+          </Pressable>
         </View>
-        <ScrollView testID="wallet-send-receipt-body" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 34) }]}>
+        <ScrollView testID="wallet-send-receipt-body" removeClippedSubviews={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+          <View ref={receiptRef} collapsable={false} testID="wallet-send-receipt-image"
+            style={[styles.content, { backgroundColor: c.miningPage, paddingBottom: Math.max(insets.bottom, 34) }]}>
             <View testID="wallet-send-receipt-summary" style={styles.summary}>
               <View style={[styles.symbol, { backgroundColor: c.walletField }]}><Feather name={received ? 'arrow-down' : 'arrow-up'} size={28} color={c.walletInk} /></View>
               <Text testID="wallet-send-receipt-amount" style={[styles.heading, { color: c.walletInk }]}>{amount}</Text>
@@ -68,6 +75,7 @@ export function SendReceipt({ receipt, money, onClose }: { receipt: SendReceiptD
               <SendDetail testID="wallet-send-receipt-amount-row" label="Amount" value={amount} />
               <SendDetail testID="wallet-send-receipt-footer-last-row" label="Fee" value="0" last />
             </View>
+          </View>
         </ScrollView>
       </View>
       </ToastSurface>

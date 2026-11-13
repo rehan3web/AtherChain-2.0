@@ -9,6 +9,7 @@ import { useToast } from '@/components/toast/ToastProvider';
 import { copyText } from '@/utils/clipboard';
 import { referralApi } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
+import { CACHE_POLICIES } from '@/services/cache';
 
 function InviteArt() {
   const c = useColors();
@@ -44,7 +45,7 @@ export function ReferralScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { data, error } = useBackendResource(referralApi.stats);
+  const { data, error } = useBackendResource(referralApi.stats, CACHE_POLICIES.referral);
   useEffect(() => { if (error) showToast({ kind: 'error', title: 'Referrals', body: error }); }, [error, showToast]);
   const REFERRAL_CODE = data?.referralCode ?? '';
   const INVITE_MESSAGE = data ? `Join me on AtherChain using my referral code ${REFERRAL_CODE}: ${data.referralLink}` : '';

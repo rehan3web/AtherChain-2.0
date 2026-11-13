@@ -5,10 +5,16 @@ import ts from 'typescript';
 
 export function load(file, deps = {}, globals = {}) {
   const exports = {};
+  let cache;
   const code = ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true },
   }).outputText;
-  vm.runInNewContext(code, { exports, require(name) { assert.ok(name in deps, `Unexpected dependency ${name}`); return deps[name]; },
+  vm.runInNewContext(code, { exports, require(name) {
+    if (!(name in deps) && (name === '@/services/cache' || name === './cache')) {
+      cache ??= load('../services/cache.ts', {}, globals);
+      return cache;
+    }
+    assert.ok(name in deps, `Unexpected dependency ${name}`); return deps[name]; },
     setTimeout, clearTimeout, ...globals });
   return exports;
 }
@@ -29,7 +35,12 @@ export function hooks() {
       if (!(index in slots)) slots[index] = { current: initial };
       return slots[index];
     },
-    useCallback: fn => fn,
+    useCallback(fn, deps) {
+      const index = cursor++, previous = slots[index];
+      if (!previous || !deps || deps.some((value, i) => value !== previous.deps?.[i]))
+        slots[index] = { deps, callback: fn };
+      return slots[index].callback;
+    },
     useEffect(fn, deps) {
       const index = cursor++, previous = slots[index];
       if (!previous || !deps || deps.some((value, i) => value !== previous.deps?.[i])) {

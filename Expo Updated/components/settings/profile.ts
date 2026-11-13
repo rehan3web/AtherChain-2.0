@@ -1,6 +1,6 @@
 import { userApi } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
-import { refreshBackendData } from '@/services/refresh';
+import { CACHE_POLICIES } from '@/services/cache';
 
 export type Profile = { name: string; username: string };
 type State = { profile: Profile; loading: boolean; error: string | null };
@@ -30,7 +30,7 @@ export function useProfile(): State {
   const resource = useBackendResource(async () => {
     const profile = await userApi.me();
     return { name: [profile.first_name, profile.last_name].filter(Boolean).join(' '), username: profile.username };
-  });
+  }, CACHE_POLICIES.profile);
   return { profile: resource.data ?? { name: '', username: '' }, loading: resource.loading, error: resource.error };
 }
 export async function saveProfile(input: Profile): Promise<void> {
@@ -39,5 +39,4 @@ export async function saveProfile(input: Profile): Promise<void> {
   const current = await userApi.me();
   const [firstName, ...rest] = normalizeProfile(input).name.split(' ');
   await userApi.updateProfile({ firstName, lastName: rest.join(' '), country: current.country });
-  refreshBackendData();
 }

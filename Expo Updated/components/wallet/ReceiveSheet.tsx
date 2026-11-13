@@ -8,11 +8,12 @@ import type { RecipientMethod } from './types';
 import { useToast } from '@/components/toast/ToastProvider';
 import { walletApi } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
+import { CACHE_POLICIES } from '@/services/cache';
 
 export function ReceiveSheet() {
   const c = useColors();
   const { showToast } = useToast();
-  const { data, error } = useBackendResource(walletApi.stats);
+  const { data, error } = useBackendResource(walletApi.stats, CACHE_POLICIES.receive);
   useEffect(() => { if (error) showToast({ kind: 'error', title: 'Receive details', body: error }); }, [error, showToast]);
   const DETAILS = [
     { id: 'address', label: 'Address', icon: 'hash', tint: 'walletContactRemy', value: data?.wallet_address ?? '' },

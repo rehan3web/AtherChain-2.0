@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { load as loadSource } from './auth-test-utils.mjs';
 import ts from 'typescript';
 
 function harness(file, dependencies) {
@@ -15,6 +16,7 @@ function harness(file, dependencies) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   vm.runInNewContext(code, { exports, FormData, require: name => {
+    if (name === '@/services/cache') return loadSource('../services/cache.ts');
     if (name === '@/hooks/useBackendResource') return { useBackendResource: callback => { loader = callback; return resource; } };
     assert.ok(name in dependencies, `Unexpected dependency ${name}`);
     return dependencies[name];

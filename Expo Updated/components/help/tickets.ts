@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { AppState } from 'react-native';
 import { supportApi, getMediaUrl, getToken, onSessionExpired } from '@/services/api';
 import { appendImage } from '@/services/uploads';
 import { onBackendRefresh } from '@/services/refresh';
+import { invalidateCache, scopesOverlap } from '@/services/cache';
 
 export type TicketStatus = 'Open' | 'Resolved' | 'Rejected' | 'Closed';
 export type Attachment = { id: string; name: string; size: number; kind: 'PNG' | 'MP4' | 'IMG'; uri?: string };
@@ -47,7 +48,8 @@ function mapTicket(result: any): Ticket {
   };
 }
 export const getTickets = () => remoteState.tickets;
-export async function loadTickets() {
+export async function loadTickets(force = true) {
+  if (force) invalidateCache(['support']);
   const generation = ++remoteGeneration;
   if (!await getToken()) {
     publishRemote({ tickets: [], loading: false, error: 'Sign in to view or create support tickets.' });
@@ -105,17 +107,21 @@ export async function sendTicketMessage(id: string, body: string, attachments: A
   publishRemote({ tickets: remoteState.tickets.map(ticket => ticket.id === id ? updated : ticket), error: null });
 }
 export function useTickets() {
+  const focused = useRef(false);
   const state = useSyncExternalStore(
     listener => { remoteListeners.add(listener); return () => { remoteListeners.delete(listener); }; },
     () => remoteState, () => remoteState,
   );
   useFocusEffect(useCallback(() => {
-    const refresh = () => { if (AppState.currentState === 'active') void loadTickets().catch(() => {}); };
-    void loadTickets().catch(() => {});
+    focused.current = true;
+    const refresh = () => { if (AppState.currentState === 'active') void loadTickets(false).catch(() => {}); };
+    void loadTickets(false).catch(() => {});
     const interval = setInterval(refresh, 15000);
     const subscription = AppState.addEventListener('change', refresh);
-    return () => { clearInterval(interval); subscription.remove(); };
+    return () => { focused.current = false; clearInterval(interval); subscription.remove(); };
   }, []));
-  useEffect(() => onBackendRefresh(() => { void loadTickets().catch(() => {}); }), []);
+  useEffect(() => onBackendRefresh(scope => {
+    if (focused.current && scopesOverlap(['support'], scope)) void loadTickets(false).catch(() => {});
+  }), []);
   return state;
 }

@@ -13,8 +13,9 @@ import { Sheet } from '@/components/wallet/Sheet';
 import { CODE_LENGTH } from './demo';
 import { userApi } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
-import { refreshBackendData } from '@/services/refresh';
+import { CACHE_POLICIES } from '@/services/cache';
 import { useToast } from '@/components/toast/ToastProvider';
+import { BackendScreenState } from '@/components/BackendScreenState';
 
 type Step = 'overview' | 'setup' | 'code' | 'disable';
 
@@ -22,15 +23,14 @@ export function TwoFaScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>('overview');
-  const [completed, setCompleted] = useState(false);
   const [code, setCode] = useState('');
   const [phase, setPhase] = useState<Phase>('entry');
   const [disabledState, setDisabledState] = useState(false);
   const [secret, setSecret] = useState('');
   const pending = useRef(false);
   const { showToast } = useToast();
-  const resource = useBackendResource(userApi.me);
-  useEffect(() => { if (resource.data) setCompleted(resource.data.twofa_enabled === true); }, [resource.data]);
+  const resource = useBackendResource(() => userApi.me({ force: true }), CACHE_POLICIES.twofa);
+  const completed = resource.data?.twofa_enabled === true;
   useEffect(() => { if (resource.error) showToast({ kind: 'error', title: 'Two-factor authentication', body: resource.error }); }, [resource.error, showToast]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const active = useRef(true);
@@ -79,7 +79,6 @@ export function TwoFaScreen() {
       if (step === 'disable') await userApi.disable2FA(token);
       else await userApi.enable2FA(token);
       if (active.current) setPhase('success');
-      refreshBackendData();
     } catch (cause) {
       if (active.current) {
         setPhase('error');
@@ -113,7 +112,7 @@ export function TwoFaScreen() {
     if (!active.current || currentOperation !== operation.current) return;
     if (phase === 'error') { setCode(''); setPhase('entry'); return; }
     if (phase === 'success' && step === 'disable') {
-      setCompleted(false); setDisabledState(true);
+      setDisabledState(true);
       setCode(''); setPhase('entry');
       setStep('overview');
       return;
@@ -121,7 +120,6 @@ export function TwoFaScreen() {
     if (phase === 'success') {
       setSecret('');
       setDisabledState(false);
-      setCompleted(true);
       setCode(''); setPhase('entry');
       setStep('overview');
     }
@@ -131,6 +129,10 @@ export function TwoFaScreen() {
   const bottom = Math.max(20, insets.bottom, Platform.OS === 'web' ? 34 : 0);
   const wrap = { paddingHorizontal: 24, maxWidth: 560, width: '100%' as const, alignSelf: 'center' as const };
 
+  if (step === 'overview' && (resource.loading || resource.error || !resource.data)) {
+    return <BackendScreenState testID="twofa-loading" error={resource.loading ? null : resource.error}
+      onRetry={() => { void resource.reload(); }} onBack={exit} />;
+  }
   return (
     <View testID="twofa-screen" style={{ flex: 1, backgroundColor: c.miningPage ?? c.background }}>
       <View style={{ paddingTop: top, paddingHorizontal: 12 }}>

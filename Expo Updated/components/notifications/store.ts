@@ -1,5 +1,6 @@
 import { notificationApi } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
+import { CACHE_POLICIES } from '@/services/cache';
 
 export type NotificationItem = {
   id: string; title: string; body: string; createdAt: string; read: boolean;
@@ -14,11 +15,11 @@ export function useNotifications() {
       createdAt: item.created_at, read: !!item.read,
       kind: item.category === 'security' ? 'security' : item.category === 'updates' ? 'updates' : 'info',
     }));
-  });
+  }, CACHE_POLICIES.notifications);
   const notifications = resource.data ?? [];
   return {
     notifications, unreadCount: notifications.filter(item => !item.read).length,
-    error: resource.error, loading: resource.loading,
+    error: resource.error, loading: resource.loading, reload: resource.reload,
     markRead: async (id: string) => {
       await notificationApi.markAsRead(id);
       await resource.reload();

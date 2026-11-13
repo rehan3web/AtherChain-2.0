@@ -1,5 +1,6 @@
 import { authApi, clearToken } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
+import { CACHE_POLICIES } from '@/services/cache';
 
 export type Session = {
   id: string; device: string; platform: 'android' | 'ios' | 'web' | 'other';
@@ -15,10 +16,10 @@ export function useSessions() {
       platform: /android/i.test(item.device) ? 'android' : /iphone|ipad|ios/i.test(item.device) ? 'ios'
         : /mozilla|chrome|safari|web/i.test(item.device) ? 'web' : 'other',
     }));
-  });
+  }, CACHE_POLICIES.sessions);
   const sessions = resource.data ?? [];
   return {
-    sessions, error: resource.error,
+    sessions, error: resource.error, loading: resource.loading, reload: resource.reload,
     signOutSession: async (id: string) => {
       await authApi.removeSession(id);
       if (sessions.find(item => item.id === id)?.current) await clearToken();

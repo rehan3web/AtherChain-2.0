@@ -37,6 +37,7 @@ function apiHarness({ platform = 'web', response, token = 'test-token', timer,
     digestStringAsync: async (_algorithm, value) => createHash('sha256').update(value).digest('hex'),
   };
   const api = load('../services/api.ts', {
+    './cache': load('../services/cache.ts', {}),
     '@react-native-async-storage/async-storage': asyncStorage,
     'react-native': { Platform: { OS: platform } },
     'expo-secure-store': {
@@ -218,7 +219,8 @@ test('security, sessions, referrals, profile and inbox use real endpoints', asyn
 
 test('transaction history loads all backend pages, not fabricated local records', async () => {
   const pages = [];
-  const transactions = load('../services/transactions.ts', { './api': {
+  const transactions = load('../services/transactions.ts', {
+    '@/components/wallet/recipient': load('../components/wallet/recipient.ts', {}), './api': {
     transactionApi: { list: async page => {
       pages.push(page);
       return { data: [{ id: String(page) }], meta: { totalPages: 3 } };
@@ -230,7 +232,9 @@ test('transaction history loads all backend pages, not fabricated local records'
 });
 
 test('history receipts retain real references and pending status', () => {
-  const transactions = load('../services/transactions.ts', { './api': {} });
+  const transactions = load('../services/transactions.ts', {
+    '@/components/wallet/recipient': load('../components/wallet/recipient.ts', {}), './api': {},
+  });
   const receipt = transactions.backendReceipt({
     id: 'db-id', timestamp: '2026-11-11T12:00:00Z', txHash: 'real-reference',
     type: 'send', amount: '2.75', status: 'pending', toAddress: 'recipient',

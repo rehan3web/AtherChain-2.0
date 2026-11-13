@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import type { NewsItem } from './posts';
 export function NewsPost({ post }: { post: NewsItem }) {
   const c = useColors();
   const [imageFailed, setImageFailed] = useState(false);
+  const hasImage = !!post.image?.uri?.trim();
+  useEffect(() => { setImageFailed(false); }, [post.image?.uri]);
   return (
     <View testID={`news-post-${post.id}`} style={styles.post}>
       <View style={[styles.avatar, { backgroundColor: c.walletInk }]}>
@@ -23,7 +25,7 @@ export function NewsPost({ post }: { post: NewsItem }) {
         <Text style={[styles.body, { color: c.walletInk }]}>
           <Text style={styles.title}>{post.title}</Text>{'\n'}{post.description}
         </Text>
-      {imageFailed ? (
+      {hasImage && (imageFailed ? (
         <View accessibilityRole="alert" style={[styles.image, styles.imageError, { backgroundColor: c.walletField }]}>
           <Feather name="image" size={24} color={c.walletSubtle} />
           <Text style={[styles.description, { color: c.walletSubtle }]}>Image unavailable</Text>
@@ -37,7 +39,7 @@ export function NewsPost({ post }: { post: NewsItem }) {
           style={[styles.image, { backgroundColor: c.walletField, borderColor: c.walletDisabled }]}
           onError={() => setImageFailed(true)}
         />
-      )}
+      ))}
       </View>
     </View>
   );

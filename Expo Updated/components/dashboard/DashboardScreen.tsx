@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -33,7 +33,7 @@ export function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { clearance } = useDockClearance();
-  const { snapshot, loading, error, retry } = useMining();
+  const { snapshot, loading, refreshing, refresh, error, retry } = useMining();
   const show = (next: Panel) => {
     if (next === 'statistics') { router.push('/statistics'); return; }
     if (next === 'referral') { router.push('/referral'); return; }
@@ -46,6 +46,7 @@ export function DashboardScreen() {
   return (
     <LinearGradient colors={[c.walletCardTop, c.walletCardBottom]} style={styles.page}>
       <ScrollView
+        refreshControl={<RefreshControl testID="dashboard-refresh" refreshing={refreshing} onRefresh={() => { void refresh(); }} tintColor={c.walletInk} />}
         testID="screen-dashboard"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.content, { paddingBottom: clearance + 20 }]}
@@ -66,6 +67,10 @@ export function DashboardScreen() {
             </View>
           </View>
           <View style={styles.headerActions}>
+            {Platform.OS === 'web' && <Pressable testID="dashboard-refresh-button" onPress={() => { void refresh(); }}
+              disabled={refreshing} accessibilityRole="button" accessibilityLabel="Refresh dashboard" style={styles.headerButton}>
+              {refreshing ? <ActivityIndicator color={c.walletInk} /> : <Feather name="refresh-cw" size={20} color={c.walletInk} />}
+            </Pressable>}
             {(['scan', 'notifications'] as const).map(key => (
               <Pressable key={key} testID={`dashboard-${key}`} onPress={() => show(key)} accessibilityRole="button" accessibilityLabel={PANELS[key].title} style={({ pressed }) => [styles.headerButton, pressed && { backgroundColor: c.walletFieldPressed }]}>
                 <Feather name={PANELS[key].icon} size={22} color={c.walletInk} />

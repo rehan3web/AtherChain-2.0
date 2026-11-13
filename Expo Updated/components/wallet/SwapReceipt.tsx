@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { copyText } from '@/utils/clipboard';
@@ -8,6 +8,7 @@ import { CoinLogo } from './SwapSheet';
 import { ConfirmedIcon } from './ConfirmedIcon';
 import { SWAP_FEE, SWAP_FEE_LABEL, swapUnits, type SwapCoin, type SwapReceiptData } from './swap-model';
 import { ToastSurface, useToast } from '@/components/toast/ToastProvider';
+import { useReceiptImage } from '@/hooks/useReceiptImage';
 
 /** Independent, edge-to-edge receipt screen, not constrained by the swap sheet. */
 export function SwapReceipt({ receipt, onClose }: { receipt: SwapReceiptData; onClose: () => void }) {
@@ -16,6 +17,7 @@ export function SwapReceipt({ receipt, onClose }: { receipt: SwapReceiptData; on
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const { receiptRef, sharing, shareImage } = useReceiptImage('atherchain-swap-receipt.png');
   const { pay, receive, quote } = receipt;
   const copyReference = async () => {
     try {
@@ -36,11 +38,14 @@ export function SwapReceipt({ receipt, onClose }: { receipt: SwapReceiptData; on
           <Pressable onPress={onClose} testID="wallet-receipt-close" accessibilityRole="button" accessibilityLabel="Close receipt" style={styles.icon}>
             <Feather name="x" size={24} color={c.walletInk} />
           </Pressable>
-          <Pressable onPress={() => { void Share.share({ message: `AtherChain swap\n${receipt.quote.amount} ${receipt.pay.sym} → ${receipt.quote.receiveAmount} ${receipt.receive.sym}\n${receipt.reference}` }).catch(() => showToast({ kind: 'error', title: 'Could not share receipt', body: 'Please retry.' })); }} testID="wallet-receipt-share" accessibilityRole="button" accessibilityLabel="Share receipt" accessibilityHint="Opens the share sheet" style={styles.icon}>
-            <Feather name="share" size={22} color={c.walletInk} />
+          <Pressable onPress={() => { void shareImage(); }} disabled={sharing} accessibilityState={{ busy: sharing, disabled: sharing }}
+            testID="wallet-receipt-share" accessibilityRole="button" accessibilityLabel="Share receipt image" accessibilityHint="Shares the full receipt as a PNG image" style={styles.icon}>
+            {sharing ? <ActivityIndicator color={c.walletInk} /> : <Feather name="share" size={22} color={c.walletInk} />}
           </Pressable>
         </View>
-        <ScrollView testID="wallet-swap-receipt-body" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 20) }]}>
+        <ScrollView testID="wallet-swap-receipt-body" removeClippedSubviews={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+          <View ref={receiptRef} collapsable={false} testID="wallet-swap-receipt-image"
+            style={[styles.content, { backgroundColor: c.miningPage, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 20) }]}>
             <View testID="wallet-swap-receipt-summary" style={styles.summary}>
               <View style={styles.pair}>
                 <Asset coin={pay} />
@@ -78,6 +83,7 @@ export function SwapReceipt({ receipt, onClose }: { receipt: SwapReceiptData; on
               <Divider />
               <ReceiptRow label="Swap fee" value={`${swapUnits(quote.feeAmount ?? quote.amount * SWAP_FEE, pay)} ${pay.sym}`} sub={`${SWAP_FEE_LABEL} · included in quote`} testID="wallet-receipt-fee" />
             </View>
+          </View>
         </ScrollView>
       </View>
       </ToastSurface>

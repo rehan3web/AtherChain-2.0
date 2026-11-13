@@ -4,7 +4,7 @@ import { CACHE_POLICIES } from '@/services/cache';
 import type { ProfilePhoto } from '@/services/profilePhoto';
 
 export type Profile = { name: string; username: string };
-type State = { profile: Profile; photo: ProfilePhoto | null; loading: boolean; error: string | null };
+type State = { profile: Profile; photo: ProfilePhoto | null; kycStatus: string | null; loading: boolean; error: string | null };
 export const NAME_MAX = 40;
 export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 30;
@@ -32,11 +32,13 @@ export function useProfile(): State {
     const profile = await userApi.me();
     const userId = profile.id == null ? '' : String(profile.id);
     return { name: [profile.first_name, profile.last_name].filter(Boolean).join(' '), username: profile.username,
+      kycStatus: typeof profile.kyc_status === 'string' ? profile.kyc_status : null,
       photo: userId ? { userId, url: typeof profile.profile_image === 'string' && profile.profile_image.trim()
         ? profile.profile_image.trim() : null } : null };
   }, CACHE_POLICIES.profile);
   return { profile: { name: resource.data?.name ?? '', username: resource.data?.username ?? '' },
-    photo: resource.data?.photo ?? null, loading: resource.loading, error: resource.error };
+    photo: resource.data?.photo ?? null, kycStatus: resource.data?.kycStatus ?? null,
+    loading: resource.loading, error: resource.error };
 }
 export async function saveProfile(input: Profile): Promise<void> {
   const errors = validateProfile(input);

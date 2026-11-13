@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useMining } from '@/components/mining/useMining';
 import { useRecentActivities } from '@/components/activity/store';
-import { ConfirmedIcon } from '@/components/wallet/ConfirmedIcon';
 import { ClaimCalendar } from './ClaimCalendar';
 import { activityTotals, miningStreak } from './model';
 
@@ -42,7 +41,6 @@ export function StatisticsScreen() {
         <View style={[s.row, { borderBottomColor: c.walletDisabled }]}>
           <Text style={[s.label, { color: c.walletSubtle }]}>Mining Streak</Text>
           <View style={s.status}>
-            {ready && streak > 0 && <ConfirmedIcon />}
             <Text testID="statistics-streak" style={[s.value, { color: ready && streak > 0 ? c.walletPositive : c.walletInk }]}>{ready ? `${streak} ${streak === 1 ? 'Day' : 'Days'}` : '—'}</Text>
           </View>
         </View>

@@ -128,6 +128,7 @@ test('Settings pencil selects a photo; personal information keeps its separate e
     './profile': { useProfile: () => ({ profile: { name: 'Fixture', username: 'fixture' }, photo: identity, loading: false }) },
     './ProfileForm': { ProfileForm: 'ProfileForm' }, './InfoDetail': { INFO: {}, InfoDetail: 'InfoDetail' },
     './AppearancePanel': { AppearancePanel: 'AppearancePanel' }, '@/components/kyc/parts': { PrimaryButton: 'PrimaryButton' },
+    './KycBadge': { KycBadge: 'KycBadge' },
     '@/components/onboarding/session': { logoutDemo() {} },
   });
   let tree = h.render(SettingsScreen);

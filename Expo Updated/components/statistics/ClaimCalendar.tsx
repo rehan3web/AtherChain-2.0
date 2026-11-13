@@ -32,10 +32,6 @@ export function ClaimCalendar({ month, onMonthChange, claimDays, now }: {
         </View>)}
       </View>)}
     </View>
-    <View style={s.legend}>
-      <ConfirmedIcon size={14} /><Text style={[s.legendText, { color: c.walletSubtle }]}>Mining claimed</Text>
-      <View style={[s.todayMark, { borderColor: c.walletInk }]} /><Text style={[s.legendText, { color: c.walletSubtle }]}>Today</Text>
-    </View>
   </View>;
 }
 
@@ -50,7 +46,4 @@ const s = StyleSheet.create({
   weekday: { fontFamily: 'DMSans_400Regular', fontSize: 11, textAlign: 'center', paddingBottom: 8 },
   day: { height: 54, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
   number: { maxWidth: '100%', fontFamily: 'DMSans_500Medium', fontSize: 14 },
-  legend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18 },
-  legendText: { fontFamily: 'DMSans_400Regular', fontSize: 11 },
-  todayMark: { width: 13, height: 13, borderRadius: 4, borderWidth: 1, marginLeft: 14 },
 });

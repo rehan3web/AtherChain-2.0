@@ -9,6 +9,7 @@ import { useColors } from '@/hooks/useColors';
 import { Sheet } from '@/components/wallet/Sheet';
 import { useDockClearance } from '@/components/navigation/GlassDock';
 import { useProfile } from './profile';
+import { KycBadge } from './KycBadge';
 import { ProfileForm } from './ProfileForm';
 import { INFO, InfoDetail } from './InfoDetail';
 import { AppearancePanel } from './AppearancePanel';
@@ -51,7 +52,7 @@ export function SettingsScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { clearance } = useDockClearance();
-  const { profile, photo, loading, error } = useProfile();
+  const { profile, photo, kycStatus, loading, error } = useProfile();
   const photoUpload = useProfilePhotoUpload(photo);
   const [panel, setPanel] = useState<Panel | null>(null);
   const [shown, setShown] = useState<Panel | null>(null);
@@ -99,6 +100,7 @@ export function SettingsScreen() {
             </>
           )}
           </View>
+          {!loading && !error && kycStatus != null && <KycBadge status={kycStatus} />}
         </View>
         {error && <Text testID="settings-profile-error" style={{ color: c.walletError, fontFamily: 'DMSans_400Regular', fontSize: 13, marginTop: 10 }}>{error}</Text>}
 

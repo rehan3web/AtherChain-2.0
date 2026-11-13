@@ -81,6 +81,27 @@ async function checkRecoveryLink(id) {
     return link.top >= field.bottom && Math.abs(link.right-field.right)<2;
   })()`), true, 'Recovery link should sit under the input, aligned right');
 }
+async function checkWrongOtp(name) {
+  await digits('111111');
+  await wait('recovery-verifying');
+  await until(`${q('twofa-anim-status')}?.textContent === 'error'`);
+  await until(`Math.abs(new DOMMatrixReadOnly(getComputedStyle(${q('twofa-circles')}).transform).m41) > 1`);
+  assert.equal(await evaluate(`getComputedStyle(${q('twofa-circle-0')}).backgroundColor`), 'rgb(220, 38, 38)');
+  assert.equal(await evaluate(`!!${q('twofa-success-circle')}`), false);
+  await capture(`${name}-wrong-otp-shake`);
+  await until(`${q('twofa-anim-status')}?.textContent === 'entry'`);
+  assert.equal(await evaluate(`${q('twofa-anim-status')}.getAttribute('aria-label')`), '0 of 6 digits entered');
+}
+async function checkCorrectOtp(name) {
+  await digits('123456');
+  await wait('twofa-success-circle');
+  const tickPath = `${q('twofa-success-circle')}.querySelector('path')`;
+  assert.ok(await evaluate(`Number(${tickPath}.getAttribute('stroke-dashoffset')) > 0`),
+    'Correct OTP must draw the tick, not immediately display a static check');
+  assert.equal(await evaluate(`!!${q('recovery-otp-screen')}`), true, 'Keep OTP mounted during the animation');
+  await until(`Number(${tickPath}.getAttribute('stroke-dashoffset')) === 0`);
+  await capture(`${name}-otp-tick-animation`);
+}
 const base = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://127.0.0.1:5000';
 try {
   await fs.mkdir('generated-artifacts/password-recovery', { recursive: true });
@@ -95,17 +116,17 @@ try {
   await click('recovery-next');
   await wait('recovery-next-loading');
   await wait('recovery-keypad'); await capture('password-otp');
+  const keypadStyle = await evaluate(`(() => {
+    const key=getComputedStyle(${q('recovery-key-1')});
+    const screen=getComputedStyle(${q('recovery-otp-screen')});
+    return {keyColor:key.backgroundColor, surface:screen.backgroundColor, radius:key.borderRadius, height:key.height};
+  })()`);
+  assert.deepEqual(keypadStyle, { keyColor: 'rgb(245, 245, 245)', surface: 'rgb(254, 254, 254)', radius: '16px', height: '50px' });
   assert.equal(await evaluate(`!!${q('recovery-verify')}`), false);
   assert.equal(await evaluate(`${q('recovery-otp-screen')}.querySelector('input') === null`), true);
-  await digits('111111');
-  await wait('recovery-verifying');
-  await until(`${q('twofa-anim-status')}?.textContent === 'error'`);
+  await checkWrongOtp('password');
   assert.equal(await evaluate(`${q('recovery-password')} !== null`), false);
-  await until(`${q('twofa-anim-status')}?.textContent === 'entry'`);
-  await digits('123456');
-  await wait('twofa-success-circle');
-  await until(`Number(${q('twofa-success-circle')}?.querySelector('path')?.getAttribute('stroke-dashoffset')) === 0`);
-  await capture('password-otp-tick-animation');
+  await checkCorrectOtp('password');
   await wait('recovery-password');
   await fill('recovery-password', 'fixture-new-password');
   await fill('recovery-confirm-password', 'fixture-new-password');
@@ -125,9 +146,8 @@ try {
   await capture('twofa-link-placement');
   await click('login-reset-twofa'); await fill('recovery-email', 'owner@test.example'); await click('recovery-next');
   await wait('recovery-keypad');
-  await digits('123456'); await wait('twofa-success-circle');
-  await until(`Number(${q('twofa-success-circle')}?.querySelector('path')?.getAttribute('stroke-dashoffset')) === 0`);
-  await capture('twofa-otp-tick-animation');
+  await checkWrongOtp('twofa');
+  await checkCorrectOtp('twofa');
   await wait('login-screen'); await until(`document.body.innerText.includes('2FA reset')`);
   assert.ok(calls.some(call => call.route === '/auth/verify-2fa-recovery'
     && call.body.userId === 'recovery-fixture' && call.body.otp === '123456'));

@@ -97,7 +97,7 @@ export function RecoveryOtp({ email, verify, resend, onVerified, onBack }: {
     else if (phase === 'success') onVerified(code);
   }, [phase, code, onVerified, run]);
 
-  return <Shell testID="recovery-otp-screen" backID="recovery-otp-back" backLabel="Change recovery email" onBack={back}>
+  return <Shell testID="recovery-otp-screen" backID="recovery-otp-back" backLabel="Change recovery email" onBack={back} surface="wallet">
     <Heading eyebrow="Email verification" title="Enter the email code"
       body={`Enter the six-digit recovery code sent to ${email}.`} />
     <View style={{ flex: 1, minHeight: 100, justifyContent: 'center' }}>

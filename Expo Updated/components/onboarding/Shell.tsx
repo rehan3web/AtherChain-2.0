@@ -33,13 +33,14 @@ export function StepTransition({ stepKey, dir, children, testID }: { testID?: st
   );
 }
 
-export function Shell({ testID, backID, backLabel, onBack, footer, children, scroll = true }: {
+export function Shell({ testID, backID, backLabel, onBack, footer, children, scroll = true, surface = 'page' }: {
   testID: string; backID: string; backLabel: string; onBack: () => void; footer?: React.ReactNode; children: React.ReactNode; scroll?: boolean;
+  surface?: 'page' | 'wallet';
 }) {
   const c = useColors();
   const { top, bottom } = useInsets();
   return (
-    <View testID={testID} style={{ flex: 1, backgroundColor: c.miningPage ?? c.background }}>
+    <View testID={testID} style={{ flex: 1, backgroundColor: surface === 'wallet' ? c.walletSheet : c.miningPage ?? c.background }}>
       <View style={{ paddingTop: top, paddingHorizontal: 12 }}>
         <Pressable testID={backID} onPress={onBack} accessibilityRole="button" accessibilityLabel={backLabel}
           style={({ pressed }) => [{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, pressed && { transform: [{ scale: 0.92 }] }]}>

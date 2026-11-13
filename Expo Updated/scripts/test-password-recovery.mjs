@@ -151,6 +151,24 @@ test('OTP has no Verify code button and keeps only the resend action below the k
   const app = otp();
   assert.equal(byId(app.render(), 'recovery-verify'), undefined);
   assert.equal(byType(app.render(), 'Button').props.testID, 'recovery-resend');
+  assert.equal(byType(app.render(), 'Shell').props.surface, 'wallet');
+});
+
+test('OTP wallet surface uses the wallet sheet color without changing the default onboarding surface', () => {
+  const h = hooks();
+  const palette = { walletSheet: '#fefefe', miningPage: '#f6f6f7', background: '#ffffff' };
+  const { Shell } = load('../components/onboarding/Shell.tsx', {
+    react: h.react, 'react-native': h.native,
+    '@expo/vector-icons': { Feather: 'Icon' },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
+    '@/hooks/useColors': { useColors: () => palette },
+    '@/components/wallet/primitives': { EASE_OUT: null, useReducedMotion: () => true },
+  });
+  const props = { testID: 'shell', backID: 'back', backLabel: 'Back', onBack() {} };
+  assert.equal(byId(h.render(() => Shell({ ...props, surface: 'wallet' })), 'shell').props.style.backgroundColor, '#fefefe');
+  assert.equal(byId(h.render(() => Shell(props)), 'shell').props.style.backgroundColor, '#f6f6f7');
+  palette.walletSheet = '#1b1b1f';
+  assert.equal(byId(h.render(() => Shell({ ...props, surface: 'wallet' })), 'shell').props.style.backgroundColor, '#1b1b1f');
 });
 test('invalid/expired OTP animates rejection, clears digits and permits retry', async () => {
   const app = otp({ verify: async () => { throw Error('Invalid or expired code'); } });

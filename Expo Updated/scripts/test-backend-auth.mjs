@@ -66,8 +66,18 @@ async function password(app) {
 }
 test('Login exposes password and 2FA recovery and clears credentials when returning', async () => {
   for (const kind of ['password', 'twofa']) {
-    const a = app('LoginScreen');
+    const a = app('LoginScreen', { login: async () => ({ require2FA: true, userId: 'fixture-owner' }) });
+    assert.equal(a.id('login-forgot-password'), undefined);
+    assert.equal(a.id('login-reset-twofa'), undefined);
     await password(a);
+    assert.ok(a.id('login-forgot-password'));
+    assert.equal(a.id('login-forgot-password').style({ pressed: false })[0].alignSelf, 'flex-end');
+    assert.equal(a.id('login-reset-twofa'), undefined);
+    if (kind === 'twofa') {
+      await a.press('login-submit');
+      assert.equal(a.id('login-forgot-password'), undefined);
+      assert.ok(a.id('login-reset-twofa'));
+    }
     await a.press(kind === 'password' ? 'login-forgot-password' : 'login-reset-twofa');
     assert.equal(a.type('Recovery').kind, kind);
     assert.equal(a.type('Recovery').initialEmail, 'first@test.example');

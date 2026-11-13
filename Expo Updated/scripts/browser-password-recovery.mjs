@@ -24,7 +24,9 @@ ws.addEventListener('message', async ({ data }) => {
     const body = request.postData ? JSON.parse(request.postData) : {};
     calls.push({ route, body });
     let responseCode = 200, response = { message: 'Fixture confirmed' };
-    if (route === '/auth/start-2fa-recovery')
+    if (route === '/auth/login')
+      response = { require2FA: true, userId: 'recovery-fixture' };
+    else if (route === '/auth/start-2fa-recovery')
       response = { message: 'Code sent', userId: 'recovery-fixture', maskedEmail: 'o***r@test.example' };
     else if (route === '/auth/verify-reset-otp' || route === '/auth/verify-2fa-recovery') {
       if ((body.token ?? body.otp) !== '123456') {
@@ -66,6 +68,19 @@ const capture = async name => {
   const result = await send('Page.captureScreenshot', { format: 'jpeg', quality: 80 });
   await fs.writeFile(`generated-artifacts/password-recovery/${name}.jpg`, Buffer.from(result.data, 'base64'));
 };
+async function openPasswordStep() {
+  await wait('login-identifier');
+  assert.equal(await evaluate(`!!${q('login-forgot-password')} || !!${q('login-reset-twofa')}`), false);
+  await fill('login-identifier', 'owner@test.example'); await click('login-next');
+  await wait('login-forgot-password');
+}
+async function checkRecoveryLink(id) {
+  assert.equal(await evaluate(`(() => {
+    const field=${q('login-password')}.parentElement.getBoundingClientRect();
+    const link=${q(id)}.getBoundingClientRect();
+    return link.top >= field.bottom && Math.abs(link.right-field.right)<2;
+  })()`), true, 'Recovery link should sit under the input, aligned right');
+}
 const base = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://127.0.0.1:5000';
 try {
   await fs.mkdir('generated-artifacts/password-recovery', { recursive: true });
@@ -73,7 +88,9 @@ try {
   await send('Fetch.enable', { patterns: [{ urlPattern: '*/api/*' }] });
   await send('Emulation.setDeviceMetricsOverride', { width: 402, height: 874, deviceScaleFactor: 1, mobile: true });
   await send('Page.navigate', { url: `${base}/login` });
-  await wait('login-forgot-password');
+  await openPasswordStep();
+  await checkRecoveryLink('login-forgot-password');
+  await capture('password-link-placement');
   await click('login-forgot-password'); await fill('recovery-email', 'owner@test.example');
   await click('recovery-next');
   await wait('recovery-next-loading');
@@ -98,6 +115,12 @@ try {
   assert.ok(calls.some(call => call.route === '/auth/reset-password' && call.body.token === '123456'));
   console.log('Password recovery: email, loading, rejected OTP, animated success, new password, toast and Login verified');
 
+  await openPasswordStep();
+  await fill('login-password', 'fixture-password'); await click('login-submit');
+  await wait('login-reset-twofa');
+  assert.equal(await evaluate(`!!${q('login-forgot-password')}`), false);
+  await checkRecoveryLink('login-reset-twofa');
+  await capture('twofa-link-placement');
   await click('login-reset-twofa'); await fill('recovery-email', 'owner@test.example'); await click('recovery-next');
   await wait('recovery-keypad');
   await digits('123456'); await wait('twofa-success-circle');
@@ -109,6 +132,7 @@ try {
   assert.equal(calls.filter(call => call.route === '/auth/reset-password').length, 1);
   assert.equal(await evaluate(`localStorage.getItem('ather_token')`), null);
   await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 1, mobile: true });
+  await openPasswordStep();
   await click('login-forgot-password'); await fill('recovery-email', 'owner@test.example'); await click('recovery-next');
   await wait('recovery-keypad');
   await evaluate(`${q('recovery-key-0')}.scrollIntoView({block:'center'})`);

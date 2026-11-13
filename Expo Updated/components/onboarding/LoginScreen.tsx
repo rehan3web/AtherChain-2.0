@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Keyboard } from 'react-native';
+import { Animated, BackHandler, Keyboard, Pressable, Text } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Heading, Notice, PrimaryButton, Progress } from '@/components/kyc/parts';
 import { AuthField, PasswordField, noStoreProps } from './SignupFields';
@@ -12,10 +12,12 @@ import { useToast } from '@/components/toast/ToastProvider';
 import { SessionLimitSheet } from './SessionLimitSheet';
 import { readSessionLimit, type SessionLimit } from './sessionLimit';
 import { RecoveryScreen, type RecoveryKind } from './RecoveryScreen';
+import { useColors } from '@/hooks/useColors';
 
 type Step = 'identifier' | 'password' | 'passkey';
 
 export function LoginScreen() {
+  const c = useColors();
   const { showToast } = useToast();
   const session = useDemoSession();
   const [step, setStep] = useState<Step>('identifier');
@@ -206,12 +208,8 @@ export function LoginScreen() {
   const footer = step === 'identifier' ? <>
     <PrimaryButton testID="login-next" label="Next" onPress={() => goTo('password')} />
     <PrimaryButton testID="login-passkey" variant="ghost" label="Login with passkey" onPress={() => goTo('passkey')} />
-    <PrimaryButton testID="login-forgot-password" variant="ghost" label="Forgot password?" disabled={disabled} onPress={() => openRecovery('password')} />
-    <PrimaryButton testID="login-reset-twofa" variant="ghost" label="Reset 2FA" disabled={disabled} onPress={() => openRecovery('twofa')} />
   </> : step === 'password' ? <>
     <PrimaryButton testID="login-submit" label={challenge ? 'Verify code' : 'Login'} loading={saving} disabled={disabled} onPress={submit} />
-    <PrimaryButton testID="login-forgot-password" variant="ghost" label="Forgot password?" disabled={disabled} onPress={() => openRecovery('password')} />
-    <PrimaryButton testID="login-reset-twofa" variant="ghost" label="Reset 2FA" disabled={disabled} onPress={() => openRecovery('twofa')} />
   </> : <>
     <PrimaryButton testID="login-passkey-confirm" label="Confirm passkey" loading={saving} disabled={disabled} onPress={open} />
     <PrimaryButton testID="login-passkey-cancel" variant="ghost" label="Cancel" disabled={saving} onPress={back} />
@@ -235,6 +233,17 @@ export function LoginScreen() {
               error={errors.password} keyboardType={challenge ? 'number-pad' : 'default'} maxLength={challenge ? 6 : 128}
               returnKeyType="done" onSubmitEditing={submit} />
           </Animated.View>
+          {(!challenge || challenge.kind === 'twofa') && <Pressable
+            testID={challenge ? 'login-reset-twofa' : 'login-forgot-password'}
+            accessibilityRole="button" accessibilityLabel={challenge ? 'Reset 2FA' : 'Forgot password?'}
+            disabled={disabled} accessibilityState={{ disabled }}
+            onPress={() => openRecovery(challenge ? 'twofa' : 'password')}
+            style={({ pressed }) => [{ alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', paddingLeft: 12,
+              opacity: disabled ? 0.5 : pressed ? 0.7 : 1 }]}>
+            <Text style={{ color: c.walletInk, fontFamily: 'DMSans_500Medium', fontSize: 13, textAlign: 'right' }}>
+              {challenge ? 'Reset 2FA' : 'Forgot password?'}
+            </Text>
+          </Pressable>}
           <Notice icon="lock" text="Your credentials are sent securely for verification. Your password is not saved on this device." />
         </React.Fragment>}
         {step === 'passkey' && <React.Fragment key="passkey">

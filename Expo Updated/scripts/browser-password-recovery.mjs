@@ -95,8 +95,10 @@ try {
   await click('recovery-next');
   await wait('recovery-next-loading');
   await wait('recovery-keypad'); await capture('password-otp');
+  assert.equal(await evaluate(`!!${q('recovery-verify')}`), false);
   assert.equal(await evaluate(`${q('recovery-otp-screen')}.querySelector('input') === null`), true);
   await digits('111111');
+  await wait('recovery-verifying');
   await until(`${q('twofa-anim-status')}?.textContent === 'error'`);
   assert.equal(await evaluate(`${q('recovery-password')} !== null`), false);
   await until(`${q('twofa-anim-status')}?.textContent === 'entry'`);

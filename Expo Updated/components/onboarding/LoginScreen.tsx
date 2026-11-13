@@ -238,7 +238,7 @@ export function LoginScreen() {
             accessibilityRole="button" accessibilityLabel={challenge ? 'Reset 2FA' : 'Forgot password?'}
             disabled={disabled} accessibilityState={{ disabled }}
             onPress={() => openRecovery(challenge ? 'twofa' : 'password')}
-            style={({ pressed }) => [{ alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', paddingLeft: 12,
+            style={({ pressed }) => [{ alignSelf: 'flex-end', marginTop: -14, minHeight: 44, justifyContent: 'center', paddingLeft: 12,
               opacity: disabled ? 0.5 : pressed ? 0.7 : 1 }]}>
             <Text style={{ color: c.walletInk, fontFamily: 'DMSans_500Medium', fontSize: 13, textAlign: 'right' }}>
               {challenge ? 'Reset 2FA' : 'Forgot password?'}

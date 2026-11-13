@@ -136,13 +136,21 @@ test('OTP uses the signup keypad and waits for real verification before the exac
   const waiting = deferred(), app = otp({ verify: () => waiting.promise });
   assert.equal(byType(app.render(), 'Keypad').props.hideDecimal, true);
   for (const key of '123456') app.key(key);
-  assert.equal(byId(app.render(), 'recovery-verify').props.loading, true);
+  assert.equal(byId(app.render(), 'recovery-verify'), undefined);
+  assert.ok(byId(app.render(), 'recovery-verifying'));
+  assert.equal(byType(app.render(), 'Keypad').props.disabled, true);
   assert.equal(byType(app.render(), 'Circles').props.phase, 'entry');
   waiting.resolve(); await settle();
   assert.equal(byType(app.render(), 'Circles').props.phase, 'success');
+  assert.equal(byId(app.render(), 'recovery-verifying'), undefined);
   assert.equal(app.verified.length, 0);
   byType(app.render(), 'Circles').props.onFinished();
   assert.deepEqual(app.verified, ['123456']);
+});
+test('OTP has no Verify code button and keeps only the resend action below the keypad', () => {
+  const app = otp();
+  assert.equal(byId(app.render(), 'recovery-verify'), undefined);
+  assert.equal(byType(app.render(), 'Button').props.testID, 'recovery-resend');
 });
 test('invalid/expired OTP animates rejection, clears digits and permits retry', async () => {
   const app = otp({ verify: async () => { throw Error('Invalid or expired code'); } });

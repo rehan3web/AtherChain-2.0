@@ -78,6 +78,9 @@ test('Login exposes password and 2FA recovery and clears credentials when return
       assert.equal(a.id('login-forgot-password'), undefined);
       assert.ok(a.id('login-reset-twofa'));
     }
+    const link = a.id(kind === 'password' ? 'login-forgot-password' : 'login-reset-twofa');
+    assert.equal(link.style({ pressed: false })[0].marginTop, -14);
+    assert.equal(link.style({ pressed: false })[0].minHeight, 44);
     await a.press(kind === 'password' ? 'login-forgot-password' : 'login-reset-twofa');
     assert.equal(a.type('Recovery').kind, kind);
     assert.equal(a.type('Recovery').initialEmail, 'first@test.example');

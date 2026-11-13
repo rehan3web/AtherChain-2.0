@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, Keyboard, View } from 'react-native';
+import { ActivityIndicator, AppState, BackHandler, Keyboard, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { CodeCircles, type Phase } from '@/components/twofa/CodeCircles';
 import { CODE_LENGTH } from '@/components/twofa/demo';
@@ -102,8 +102,8 @@ export function RecoveryOtp({ email, verify, resend, onVerified, onBack }: {
       body={`Enter the six-digit recovery code sent to ${email}.`} />
     <View style={{ flex: 1, minHeight: 100, justifyContent: 'center' }}>
       <CodeCircles filled={code.length} phase={phase} onFinished={onFinished} />
-      <PrimaryButton testID="recovery-verify" label="Verify code" loading={saving}
-        disabled={resending || phase !== 'entry' || code.length !== CODE_LENGTH} onPress={() => { void submit(code); }} />
+      {saving && <ActivityIndicator testID="recovery-verifying" accessibilityLabel="Verifying code"
+        accessibilityRole="progressbar" accessibilityState={{ busy: true }} style={{ marginTop: 16 }} />}
     </View>
     <NumericKeypad hideDecimal testIDPrefix="recovery-key" onKey={onKey}
       disabled={saving || resending || phase !== 'entry'} onClear={() => { if (!busy.current && phase === 'entry') setCode(''); }} />

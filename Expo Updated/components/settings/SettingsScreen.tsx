@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
+import { useProfilePhotoUpload } from '@/hooks/useProfilePhotoUpload';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
@@ -50,7 +51,8 @@ export function SettingsScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { clearance } = useDockClearance();
-  const { profile, loading, error } = useProfile();
+  const { profile, photo, loading, error } = useProfile();
+  const photoUpload = useProfilePhotoUpload(photo);
   const [panel, setPanel] = useState<Panel | null>(null);
   const [shown, setShown] = useState<Panel | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -76,17 +78,12 @@ export function SettingsScreen() {
       <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 640, alignSelf: 'center', paddingTop: (Platform.OS === 'web' ? 67 : insets.top) + 48, paddingHorizontal: 20, paddingBottom: clearance }} showsVerticalScrollIndicator={false}>
         <View testID="settings-profile" style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
           <View style={{ width: 64, height: 64, flexShrink: 0 }}>
-            <LinearGradient
-              testID="settings-gradient-avatar"
-              colors={['#f69a27', '#db5380', '#b700d6']}
-              locations={[0, .5, 1]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ width: 64, height: 64, borderRadius: 32 }}
-            />
-            <Pressable testID="settings-edit-profile" onPress={() => open('edit')} disabled={loading} accessibilityRole="button" accessibilityLabel="Edit profile" hitSlop={10}
+            <ProfileAvatar photo={photo} size={64} testID="settings-gradient-avatar" />
+            <Pressable testID="settings-edit-profile" onPress={() => { void photoUpload.selectPhoto(); }}
+              disabled={loading || !photo || photoUpload.busy} accessibilityRole="button" accessibilityLabel="Change profile photo"
+              accessibilityState={{ disabled: loading || !photo || photoUpload.busy, busy: photoUpload.busy }} hitSlop={10}
               style={({ pressed }) => [{ position: 'absolute', top: -4, right: -8, width: 28, height: 28, borderRadius: 14, backgroundColor: c.background, borderWidth: 1, borderColor: c.walletField, alignItems: 'center', justifyContent: 'center' }, pressed && { transform: [{ scale: 0.9 }], backgroundColor: c.walletFieldPressed }]}>
-              <Feather name="edit-2" size={13} color={c.walletInk} />
+              {photoUpload.busy ? <ActivityIndicator size="small" color={c.walletInk} /> : <Feather name="edit-2" size={13} color={c.walletInk} />}
             </Pressable>
           </View>
           <View testID="settings-profile-details" style={{ flex: 1, minWidth: 0 }}>

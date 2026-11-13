@@ -9,6 +9,7 @@ import { useDockClearance } from '@/components/navigation/GlassDock';
 import { useMining } from '@/components/mining/useMining';
 import { RefillMeter } from '@/components/mining/RefillMeter';
 import { useProfile } from '@/components/settings/profile';
+import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 import { ScalePressable } from '@/components/wallet/primitives';
 import { RecentActivity } from './RecentActivity';
 import { useTheme } from '@/hooks/useTheme';
@@ -29,7 +30,7 @@ export function DashboardScreen() {
   const c = useColors();
   const { error: themeError } = useTheme();
   const router = useRouter();
-  const { profile } = useProfile();
+  const { profile, photo } = useProfile();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { clearance } = useDockClearance();
@@ -53,14 +54,7 @@ export function DashboardScreen() {
       >
         <View style={[styles.header, { backgroundColor: c.walletCardTop, paddingTop: (Platform.OS === 'web' ? 67 : insets.top) + 16 }]}>
           <View style={styles.profile}>
-            <LinearGradient
-              testID="dashboard-gradient-avatar"
-              colors={['#f69a27', '#db5380', '#b700d6']}
-              locations={[0, .5, 1]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.avatar}
-            />
+            <ProfileAvatar photo={photo} size={48} testID="dashboard-gradient-avatar" style={styles.avatar} />
             <View style={styles.nameWrap}>
               <Text numberOfLines={1} style={[styles.greeting, { color: c.walletSubtle }]}>Welcome back</Text>
               <Text numberOfLines={1} style={[styles.name, { color: c.walletInk }]}>{profile.name}</Text>

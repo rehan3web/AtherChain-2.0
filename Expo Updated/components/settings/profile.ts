@@ -1,9 +1,10 @@
 import { userApi } from '@/services/api';
 import { useBackendResource } from '@/hooks/useBackendResource';
 import { CACHE_POLICIES } from '@/services/cache';
+import type { ProfilePhoto } from '@/services/profilePhoto';
 
 export type Profile = { name: string; username: string };
-type State = { profile: Profile; loading: boolean; error: string | null };
+type State = { profile: Profile; photo: ProfilePhoto | null; loading: boolean; error: string | null };
 export const NAME_MAX = 40;
 export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 30;
@@ -29,9 +30,13 @@ export function validateProfile(input: Profile): ProfileErrors {
 export function useProfile(): State {
   const resource = useBackendResource(async () => {
     const profile = await userApi.me();
-    return { name: [profile.first_name, profile.last_name].filter(Boolean).join(' '), username: profile.username };
+    const userId = profile.id == null ? '' : String(profile.id);
+    return { name: [profile.first_name, profile.last_name].filter(Boolean).join(' '), username: profile.username,
+      photo: userId ? { userId, url: typeof profile.profile_image === 'string' && profile.profile_image.trim()
+        ? profile.profile_image.trim() : null } : null };
   }, CACHE_POLICIES.profile);
-  return { profile: resource.data ?? { name: '', username: '' }, loading: resource.loading, error: resource.error };
+  return { profile: { name: resource.data?.name ?? '', username: resource.data?.username ?? '' },
+    photo: resource.data?.photo ?? null, loading: resource.loading, error: resource.error };
 }
 export async function saveProfile(input: Profile): Promise<void> {
   const errors = validateProfile(input);

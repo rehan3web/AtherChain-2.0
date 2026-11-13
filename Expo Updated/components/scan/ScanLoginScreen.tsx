@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Alert, Animated, AppState, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Alert, Animated, AppState, Easing, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -7,6 +7,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/services/api';
 import { useToast } from '@/components/toast/ToastProvider';
+import { CodeCircles } from '@/components/twofa/CodeCircles';
 
 const INK = '#F6F3EE';
 const DIM = 'rgba(246,243,238,0.78)';
@@ -21,6 +22,7 @@ export function ScanLoginScreen() {
   const [focused, setFocused] = useState(false);
   const [camError, setCamError] = useState('');
   const [done, setDone] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [reduced, setReduced] = useState(false);
   const mounted = useRef(true);
   const generation = useRef(0);
@@ -46,13 +48,14 @@ export function ScanLoginScreen() {
     });
     try {
       if (!confirm) return;
+      setSaving(true);
       const result = await authApi.approveQRLogin(token);
       if (result.success !== true) throw new Error('The backend did not approve this login.');
       if (mounted.current) setDone(true);
       AccessibilityInfo.announceForAccessibility('Browser login approved.');
     } catch (cause) {
       showToast({ kind: 'error', title: 'Login approval failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
-    } finally { approving.current = false; }
+    } finally { approving.current = false; if (mounted.current) setSaving(false); }
   };
 
   useEffect(() => {
@@ -85,7 +88,7 @@ export function ScanLoginScreen() {
   }, [permission, requestPermission, done]);
 
   // Animate the existing scan line; only a verified QR approval completes login.
-  const running = focused && appActive && !done;
+  const running = focused && appActive && !done && !saving;
   useEffect(() => {
     if (!running) return;
     const gen = ++generation.current;
@@ -125,7 +128,7 @@ export function ScanLoginScreen() {
           onMountError={e => setCamError(e?.message ? `Camera unavailable: ${e.message}` : 'Camera unavailable on this device.')} />
       ) : (
         <LinearGradient colors={['#3A3632', BASE]} style={[StyleSheet.absoluteFill, st.center]}>
-          <Feather name="monitor" size={110} color="rgba(246,243,238,0.10)" />
+          {!done && <Feather name="monitor" size={110} color="rgba(246,243,238,0.10)" />}
         </LinearGradient>
       )}
       <LinearGradient pointerEvents="none" colors={['rgba(20,18,16,0.55)', 'transparent']} style={[st.top, { height: insets.top + 120 }]} />
@@ -139,24 +142,28 @@ export function ScanLoginScreen() {
       </View>
 
       <View pointerEvents="none" style={st.frameWrap}>
-        <View style={st.frame}>
+        {done ? (
+          <View testID="scan-success-mark" style={st.center}>
+            <CodeCircles filled={6} phase="success" onFinished={() => {}} />
+          </View>
+        ) : <View testID="scan-frame" style={st.frame}>
           <View style={[st.corner, { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 6 }]} />
           <View style={[st.corner, { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 6 }]} />
           <View style={[st.corner, { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 6 }]} />
           <View style={[st.corner, { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 6 }]} />
-          {!done && !reduced && <Animated.View testID="scan-line" style={[st.line, { transform: [{ translateY }] }]} />}
-          {done && (
-            <View testID="scan-success-mark" style={[StyleSheet.absoluteFill, st.center]}>
-              <View style={st.check}><Feather name="check" size={36} color={BASE} /></View>
+          {!saving && !reduced && <Animated.View testID="scan-line" style={[st.line, { transform: [{ translateY }] }]} />}
+          {saving && (
+            <View testID="scan-approving" style={[StyleSheet.absoluteFill, st.center]}>
+              <ActivityIndicator size="large" color={INK} accessibilityLabel="Approving browser sign-in" />
             </View>
           )}
-        </View>
+        </View>}
       </View>
 
       <View style={[st.bottom, { paddingBottom: insets.bottom + 28 }]}>
         {done ? (
           <View testID="scan-success" style={st.block}>
-            <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={st.title}>Login Completed</Text>
+            <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={st.title}>Scan Completed</Text>
             <Text style={st.body}>The browser sign-in was approved by AtherChain.</Text>
             <Pressable testID="scan-done" onPress={leave} accessibilityRole="button" accessibilityLabel="Done, return to dashboard"
               style={({ pressed }) => [st.primary, pressed && { transform: [{ scale: 0.98 }] }]}>
@@ -186,7 +193,6 @@ const st = StyleSheet.create({
   frame: { width: FRAME, height: FRAME, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(246,243,238,0.45)' },
   corner: { position: 'absolute', width: 26, height: 26, borderColor: INK, margin: -2 },
   line: { position: 'absolute', left: 8, right: 8, top: 0, height: 2, borderRadius: 1, backgroundColor: INK, opacity: 0.85 },
-  check: { width: 72, height: 72, borderRadius: 36, backgroundColor: INK, alignItems: 'center', justifyContent: 'center' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 28 },
   block: { alignItems: 'stretch', gap: 8 },
   title: { fontFamily: 'DMSans_700Bold', fontSize: 24, letterSpacing: -0.4, color: INK, textAlign: 'center' },

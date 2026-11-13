@@ -12,6 +12,7 @@ import { SWAP_COINS, SWAP_FEE_LABEL, swapQuote, swapUnits, type SwapCoin, type S
 import { NumericKeypad } from './NumericKeypad';
 import { press, showRaw, useMoney } from './format';
 import { useToast } from '@/components/toast/ToastProvider';
+import { BackendScreenState } from '@/components/BackendScreenState';
 
 export function CoinLogo({ coin, size = 24 }: { coin: SwapCoin; size?: number }) {
   return (
@@ -28,6 +29,8 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
     const [settings, profile] = await Promise.all([swapApi.rate(), userApi.me()]);
     if (!Number.isFinite(Number(settings.rate)) || Number(settings.rate) <= 0)
       throw new Error('The backend returned an invalid swap rate.');
+    if (profile.at_balance == null || !Number.isFinite(Number(profile.at_balance)) || Number(profile.at_balance) < 0)
+      throw new Error('The backend returned an invalid AT balance.');
     return { rate: Number(settings.rate), balance: Number(profile.at_balance), active: settings.active === true };
   });
   const balance = resource.data?.balance ?? Number.NaN;
@@ -123,6 +126,10 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
     setRaw(cts === 0 ? '' : dec === 0 ? String(int) : `${int}.${String(dec).padStart(2, '0')}`);
   };
 
+  if (!review && (resource.loading || !resource.data)) {
+    return <BackendScreenState testID="wallet-swap-loading" error={resource.loading ? null : resource.error}
+      onRetry={() => { void resource.reload(); }} />;
+  }
   if (review && quoteSnapshot.current) {
     const s = quoteSnapshot.current;
     return (

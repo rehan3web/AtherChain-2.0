@@ -6,6 +6,26 @@ const swap = (h, k = key, amount = 10) => h.load('src/services/swapService.ts').
 const send = (h, k = key, amount = 20) => h.load('src/services/wallet.ts').WalletService.transfer('sender', 'receiver', amount, 'send', 'ATH', k);
 const mine = (h, k = key, boost = false) => h.load('src/services/miningService.ts').MiningService.execute('sender', k, boost);
 
+test('send history persists username, email or address method through delivery and replay', async () => {
+    for (const [identifier, method, value] of [
+        ['receiver', 'username', '@receiver'],
+        ['receiver@example.test', 'email', 'receiver@example.test'],
+        ['ATH_RECEIVER', 'address', 'ATH_RECEIVER'],
+    ]) {
+        const h = harness();
+        const service = h.load('src/services/wallet.ts').WalletService;
+        const first = await service.transfer('sender', identifier, 2, 'send', 'ATH', key);
+        const event = h.db.state.operations[0].events[0].document;
+        assert.deepEqual(event.metadata.recipient, { method, value });
+        assert.equal(h.db.state.operations[0].events[1].document.metadata, undefined);
+        await h.load('src/services/ledgerHistory.ts').flushLedgerHistory();
+        assert.deepEqual([...h.mongo.transactions.values()].find(tx => tx.userId === 'sender').metadata.recipient, { method, value });
+        const replay = await service.transfer('sender', identifier, 2, 'send', 'ATH', key);
+        assert.equal(first.hash, replay.hash);
+        assert.equal(h.db.state.wallets.sender.balance_ath, '98.00000000');
+    }
+});
+
 test('send debits, credits and stores both history intents in one commit', async () => {
     const h = harness(); const result = await send(h);
     assert.equal(result.success, true);

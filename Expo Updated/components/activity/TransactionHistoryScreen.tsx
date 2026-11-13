@@ -6,8 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { SendReceipt } from '@/components/wallet/SendReceipt';
 import { SwapReceipt } from '@/components/wallet/SwapReceipt';
-import { useTransactionActivities, type Activity, type ActivityReceipt } from './store';
+import { useTransactionActivityResource, type Activity, type ActivityReceipt } from './store';
 import { receiptMoney } from './receiptMoney';
+import { BackendScreenState } from '@/components/BackendScreenState';
 
 type Txn = Activity & { receipt: ActivityReceipt };
 
@@ -45,12 +46,15 @@ function Row({ item, onPress }: { item: Txn; onPress: () => void }) {
 export function TransactionHistoryScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const items = useTransactionActivities();
+  const resource = useTransactionActivityResource();
+  const items = resource.items;
   const [selected, setSelected] = useState<Txn | null>(null);
   const back = () => router.canGoBack() ? router.back() : router.replace('/');
   const close = () => setSelected(null);
   const r = selected?.receipt;
 
+  if (resource.loading || resource.error) return <BackendScreenState testID="transactions-loading"
+    error={resource.loading ? null : resource.error} onRetry={() => { void resource.reload(); }} onBack={back} />;
   return (
     <View testID="screen-transactions" style={[styles.page, { backgroundColor: c.walletCardTop, paddingTop: Platform.OS === 'web' ? 67 : insets.top }]}>
       <View style={styles.header}>
@@ -70,14 +74,6 @@ export function TransactionHistoryScreen() {
         keyExtractor={item => item.id}
         renderItem={({ item }) => <Row item={item} onPress={() => setSelected(item)} />}
         ItemSeparatorComponent={() => <View style={[styles.sep, { backgroundColor: c.walletDisabled }]} />}
-        ListHeaderComponent={items.length ? (
-          <View style={styles.noteRow}>
-            <View style={[styles.dot, { backgroundColor: c.walletSubtle }]} />
-            <Text style={[styles.note, { color: c.walletSubtle }]}>
-              Demo activity · This app session · {items.length} {items.length === 1 ? 'transaction' : 'transactions'}
-            </Text>
-          </View>
-        ) : undefined}
         ListEmptyComponent={
           <View testID="transactions-empty" style={styles.empty}>
             <View style={[styles.emptyIcon, { backgroundColor: c.walletField }]}>
@@ -85,7 +81,7 @@ export function TransactionHistoryScreen() {
             </View>
             <Text style={[styles.emptyTitle, { color: c.walletInk }]}>No transactions yet</Text>
             <Text style={[styles.emptyBody, { color: c.walletSubtle }]}>
-              Transfers, swaps and mining claims you make in this session will show up here.
+              Your transfers, swaps and mining claims will show up here.
             </Text>
           </View>
         }

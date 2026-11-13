@@ -111,6 +111,7 @@ function walletHarness(send) {
     constructor(message, status = 400) { super(message); this.status = status; }
   }
   const { Wallet } = load('../components/wallet/Wallet.tsx', {
+    '@/components/BackendScreenState': { BackendScreenState: 'BackendScreenState' },
     react: react.react, './MoneyCard': { MoneyCard: 'MoneyCard' },
     './recipient': { recipientError: () => null },
     'expo-router': { router: { push() {} } },

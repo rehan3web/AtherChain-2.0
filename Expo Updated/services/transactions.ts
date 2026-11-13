@@ -1,6 +1,8 @@
 import { transactionApi } from './api';
 import type { Transaction } from '@/components/wallet/types';
 import type { SendReceiptData } from '@/components/wallet/SendReceipt';
+import { normalizeRecipient, recipientError } from '@/components/wallet/recipient';
+import type { TransferRecipient } from '@/components/wallet/types';
 
 export type BackendTransaction = {
   id: string; timestamp: string; txHash: string; type: string; amount: string;
@@ -29,11 +31,17 @@ export function walletTransaction(item: BackendTransaction): Transaction {
   const date = new Date(item.timestamp);
   if (!Number.isFinite(amount) || !Number.isFinite(date.getTime()))
     throw new Error('The backend returned an invalid transaction amount or date.');
+  const savedRecipient = item.metadata?.recipient;
+  const recipient: TransferRecipient = !incoming && savedRecipient &&
+    ['username', 'email', 'address'].includes(savedRecipient.method) &&
+    typeof savedRecipient.value === 'string' && !recipientError(savedRecipient.method, savedRecipient.value)
+    ? normalizeRecipient(savedRecipient.method, savedRecipient.value)
+    : { method: 'address', value: incoming ? item.fromAddress ?? '' : item.toAddress ?? '' };
   return {
     id: String(item.id), title: item.type === 'mining' ? 'Mining claimed'
       : item.type === 'swap' ? 'AT to ATH' : incoming ? 'Received' : 'Sent',
     amount: incoming ? amount : -amount, date,
-    recipient: { method: 'address', value: incoming ? item.fromAddress ?? '' : item.toAddress ?? '' },
+    recipient,
     reference: item.txHash, status: item.status,
     currency: item.type === 'mining' || item.type === 'referral' ? 'AT' : 'ATH',
   };
@@ -47,7 +55,8 @@ export function backendReceipt(item: BackendTransaction): SendReceiptData {
     note: '', reference: item.txHash || String(item.id),
     createdAt: new Date(item.timestamp).toLocaleString('en-US'),
     demo: false, direction: transaction.amount >= 0 ? 'received' : 'sent',
-    transactionTitle: transaction.title, methodLabel: item.type,
+    transactionTitle: transaction.title,
+    methodLabel: ['send', 'receive', 'transfer'].includes(item.type) ? undefined : item.type,
     status: item.status,
   };
 }

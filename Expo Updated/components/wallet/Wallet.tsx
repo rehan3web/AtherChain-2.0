@@ -10,6 +10,7 @@ import { getAllTransactions, walletTransaction } from '@/services/transactions';
 import { useBackendResource } from '@/hooks/useBackendResource';
 import { refreshBackendData } from '@/services/refresh';
 import { useToast } from '@/components/toast/ToastProvider';
+import { BackendScreenState } from '@/components/BackendScreenState';
 
 export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewStyle>; fullScreen?: boolean } = {}) {
   const { showToast } = useToast();
@@ -54,11 +55,13 @@ export function Wallet({ style, fullScreen = false }: { style?: StyleProp<ViewSt
       throw cause;
     } finally { sending.current = false; }
   };
+  if (!resource.data) return <BackendScreenState testID="wallet-loading" error={resource.loading ? null : resource.error}
+    onRetry={() => { void resource.reload(); }} />;
   return (
     <MoneyCard
       demo={false}
       fullScreen={fullScreen}
-      balance={resource.data ? Number(resource.data.stats.ath_balance) : Number.NaN}
+      balance={Number(resource.data.stats.ath_balance)}
       contacts={[]}
       transactions={resource.data?.transactions ?? []}
       onSend={onSend}

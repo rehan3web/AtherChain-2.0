@@ -44,6 +44,7 @@ export function ChangePasswordScreen() {
   const { showToast } = useToast();
   const [vals, setVals] = useState<Record<Key, string>>({ current: '', next: '', confirm: '' });
   const [errors, setErrors] = useState<PasswordErrors>({});
+  const [saving, setSaving] = useState(false);
   const nextRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const confirmRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const pending = useRef(false);
@@ -60,6 +61,7 @@ export function ChangePasswordScreen() {
     setErrors(e);
     if (e.current || e.next || e.confirm) return;
     pending.current = true;
+    setSaving(true);
     try {
       await userApi.changePassword(vals.current, vals.next);
       setVals({ current: '', next: '', confirm: '' });
@@ -68,7 +70,7 @@ export function ChangePasswordScreen() {
       back();
     } catch (cause) {
       showToast({ kind: 'error', title: 'Password change failed', body: cause instanceof Error ? cause.message : 'Please retry.' });
-    } finally { pending.current = false; }
+    } finally { pending.current = false; setSaving(false); }
   };
 
   const top = (Platform.OS === 'web' ? 67 : insets.top) + 8;
@@ -97,7 +99,7 @@ export function ChangePasswordScreen() {
           </View>
         </ScrollView>
         <View style={{ paddingHorizontal: 24, paddingBottom: bottom, paddingTop: 8, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
-          <PrimaryButton testID="password-submit" label="Change password" onPress={submit} />
+          <PrimaryButton testID="password-submit" label="Change password" loading={saving} onPress={submit} />
         </View>
       </KeyboardAvoidingView>
     </View>

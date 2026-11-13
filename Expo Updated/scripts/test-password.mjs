@@ -29,7 +29,7 @@ test('validation requires all fields, length, different password and matching co
   assert.equal(Object.keys(validate('fake old', 'fake new value', 'fake new value')).length, 0);
 });
 
-function harness(canGoBack = false) {
+function harness(canGoBack = false, changePassword = async () => {}) {
   const state = [];
   const refs = [];
   let cursor = 0;
@@ -47,6 +47,7 @@ function harness(canGoBack = false) {
     useRef: initial => refs[refCursor++] ?? (refs[refCursor - 1] = { current: initial }),
   };
   const { ChangePasswordScreen } = load('../components/password/ChangePasswordScreen.tsx', {
+    '@/services/api': { userApi: { changePassword } },
     react,
     'react-native': { Keyboard: { dismiss: () => dismissed++ }, KeyboardAvoidingView: 'KeyboardAvoidingView',
       Platform: { OS: 'android' }, Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', TextInput: 'TextInput', View: 'View' },
@@ -87,20 +88,62 @@ test('invalid form shows inline errors without success or navigation; edits clea
   assert.equal(app.navigation.length, 0);
 });
 
-test('successful practice clears values, dismisses keyboard, reports no real update and returns', () => {
+test('confirmed backend password change clears values, dismisses keyboard and returns', async () => {
   for (const canGoBack of [true, false]) {
-    const app = harness(canGoBack);
+    const calls = [];
+    const app = harness(canGoBack, async (...args) => { calls.push(args); });
     app.change('password-current', 'fake old');
     app.change('password-new', 'fake new value');
     app.change('password-confirm', 'fake new value');
-    app.press('password-submit');
+    await app.press('password-submit');
+    assert.deepEqual(calls, [['fake old', 'fake new value']]);
     assert.equal(app.field('password-current').props.value, '');
     assert.equal(app.field('password-new').props.value, '');
     assert.equal(app.field('password-confirm').props.value, '');
     assert.equal(app.dismissed, 1);
-    assert.match(app.toasts[0].body, /No real password was changed or saved/);
+    assert.equal(app.toasts[0].title, 'Password changed');
     assert.deepEqual(app.navigation, [canGoBack ? 'back' : '/(tabs)/settings']);
   }
+});
+
+test('password button stays loading until the backend responds and prevents duplicate submits', async () => {
+  let finish, calls = 0;
+  const app = harness(false, () => { calls++; return new Promise(resolve => { finish = resolve; }); });
+  app.change('password-current', 'fake old');
+  app.change('password-new', 'fake new value');
+  app.change('password-confirm', 'fake new value');
+  const request = app.press('password-submit');
+  assert.equal(app.byId('password-submit').props.loading, true);
+  await app.press('password-submit');
+  await app.field('password-confirm').props.onSubmit();
+  assert.equal(calls, 1);
+  assert.equal(app.toasts.length, 0);
+  assert.equal(app.navigation.length, 0);
+  finish(); await request;
+  assert.equal(app.byId('password-submit').props.loading, false);
+  assert.equal(app.toasts[0].kind, 'success');
+});
+
+test('password request failure stops loading, retains input and allows retry', async () => {
+  let reject, calls = 0;
+  const app = harness(false, () => {
+    calls++;
+    if (calls === 1) return new Promise((_resolve, no) => { reject = no; });
+    return Promise.resolve();
+  });
+  app.change('password-current', 'fake old');
+  app.change('password-new', 'fake new value');
+  app.change('password-confirm', 'fake new value');
+  const request = app.press('password-submit');
+  assert.equal(app.byId('password-submit').props.loading, true);
+  reject(Error('Current password is incorrect')); await request;
+  assert.equal(app.byId('password-submit').props.loading, false);
+  assert.equal(app.field('password-new').props.value, 'fake new value');
+  assert.equal(app.toasts[0].kind, 'error');
+  assert.equal(app.navigation.length, 0);
+  await app.press('password-submit');
+  assert.equal(calls, 2);
+  assert.equal(app.toasts.at(-1).kind, 'success');
 });
 
 test('password fields default to masked and opt out of autocorrect and autofill; toggle reveals', () => {

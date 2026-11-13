@@ -21,7 +21,7 @@ export type Activity = {
 /** Local notifications never manufacture transaction records. */
 export function recordActivity(_activity: Activity) { refreshBackendData(); }
 
-export function useRecentActivities(): readonly Activity[] {
+export function useActivityResource() {
   const { showToast } = useToast();
   const resource = useBackendResource<Activity[]>(async () => {
     const items = await getAllTransactions();
@@ -50,7 +50,17 @@ export function useRecentActivities(): readonly Activity[] {
     });
   });
   useEffect(() => { if (resource.error) showToast({ kind: 'error', title: 'Transaction history', body: resource.error }); }, [resource.error, showToast]);
-  return resource.data ?? [];
+  return resource;
+}
+export function useRecentActivities(): readonly Activity[] {
+  return useActivityResource().data ?? [];
+}
+export function useTransactionActivityResource() {
+  const resource = useActivityResource();
+  return {
+    ...resource,
+    items: (resource.data ?? []).filter((item): item is Activity & { receipt: ActivityReceipt } => !!item.receipt),
+  };
 }
 export function useTransactionActivities(): readonly (Activity & { receipt: ActivityReceipt })[] {
   return useRecentActivities().filter((item): item is Activity & { receipt: ActivityReceipt } => !!item.receipt);

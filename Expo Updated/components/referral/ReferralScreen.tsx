@@ -104,8 +104,8 @@ export function ReferralScreen() {
         contentContainerStyle={styles.content}>
         <View style={styles.art} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><InviteArt /></View>
         <Text style={[styles.title, { color: c.walletInk }]}>Invite friends,{'\n'}grow the community</Text>
-        <Text style={[styles.intro, { color: c.walletSubtle }]}>
-          Share AtherChain with people you trust. Rewards are shown for when a friend signs up and when they complete KYC.
+        <Text testID="referral-reward-conditions" style={[styles.intro, { color: c.walletSubtle }]}>
+          Share AtherChain with people you trust. Your sign-up reward is automatically credited after your referred friend mines for the first time—not when they create an account. The KYC reward is separate and is credited when their KYC is approved.
         </Text>
 
         <View style={[styles.card, { backgroundColor: c.walletSurfaceTop, borderColor: c.walletDisabled }]}>

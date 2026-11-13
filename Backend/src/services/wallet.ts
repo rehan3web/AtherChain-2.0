@@ -72,8 +72,13 @@ export class WalletService {
                 fromAddress: senderId ? addresses.get(senderId) : this.getTreasuryAddress(),
                 toAddress: recipientId ? addresses.get(recipientId) : recipient };
             const events: HistoryEvent[] = [];
+            // Save how the sender addressed this payment, not just the resolved wallet.
+            // This is part of the durable outbox event, including idempotent recovery.
+            const method = recipient === addresses.get(recipientId!) || /^[0-9a-f-]{36}$/i.test(recipient)
+                ? 'address' : recipient.includes('@') ? 'email' : 'username';
             if (senderId) events.push({ collection: 'transactions', document: {
-                ...base, _id: new Types.ObjectId().toHexString(), userId: senderId, txHash: hash, type
+                ...base, _id: new Types.ObjectId().toHexString(), userId: senderId, txHash: hash, type,
+                metadata: { recipient: { method, value: method === 'username' ? `@${recipient}` : recipient } }
             } });
             if (recipientId) events.push({ collection: 'transactions', document: {
                 ...base, _id: new Types.ObjectId().toHexString(), userId: recipientId, txHash: `${hash}_RCV`,

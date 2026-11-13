@@ -134,8 +134,10 @@ export function AnimatedAmount({
   style?: StyleProp<import('react-native').TextStyle>;
 }) {
   const reduce = useReducedMotion();
-  const av = useRef(new Animated.Value(value)).current;
-  const [text, setText] = useState(() => format(value));
+  const finite = Number.isFinite(value);
+  const av = useRef(new Animated.Value(finite ? value : 0)).current;
+  const wasFinite = useRef(finite);
+  const [text, setText] = useState(() => finite ? format(value) : '—');
   const fmt = useRef(format);
   fmt.current = format;
   useEffect(() => {
@@ -143,7 +145,14 @@ export function AnimatedAmount({
     return () => av.removeListener(id);
   }, [av]);
   useEffect(() => {
-    if (reduce) {
+    if (!Number.isFinite(value)) {
+      av.stopAnimation();
+      wasFinite.current = false;
+      setText('—');
+      return;
+    }
+    if (reduce || !wasFinite.current) {
+      wasFinite.current = true;
       av.setValue(value);
       setText(fmt.current(value));
       return;
@@ -152,7 +161,7 @@ export function AnimatedAmount({
     a.start(({ finished }) => finished && setText(fmt.current(value)));
     return () => a.stop();
   }, [value, av, reduce]);
-  return <Text style={style}>{text}</Text>;
+  return <Text style={style}>{finite ? text : '—'}</Text>;
 }
 
 export function Switch({

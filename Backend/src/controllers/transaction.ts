@@ -55,6 +55,6 @@ export const getTransactions = async (req: Request | any, res: Response) => {
 
     } catch (error) {
         console.error('Transaction Fetch Error:', error);
-        res.json({ data: [], meta: { totalPages: 0, currentPage: 1, totalCount: 0 } });
+        res.status(500).json({ message: 'Failed to fetch transaction history. Please try again.' });
     }
 };

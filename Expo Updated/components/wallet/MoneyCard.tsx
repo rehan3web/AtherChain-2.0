@@ -142,7 +142,7 @@ export function MoneyCard({
           <View
             accessible
             accessibilityLiveRegion="polite"
-            accessibilityLabel={hidden ? 'Balance hidden' : isAth ? `Balance ${m.num(balance)} ATH` : `Balance ${m.full(balance)}`}
+            accessibilityLabel={hidden ? 'Balance hidden' : !Number.isFinite(balance) ? 'Balance loading' : isAth ? `Balance ${m.num(balance)} ATH` : `Balance ${m.full(balance)}`}
             testID="wallet-balance"
             style={[styles.centerRow, { marginTop: 4.4 * q }, isAth && styles.baselineRow]}
           >

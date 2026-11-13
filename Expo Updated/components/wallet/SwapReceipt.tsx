@@ -77,8 +77,6 @@ export function SwapReceipt({ receipt, onClose }: { receipt: SwapReceiptData; on
               <ReceiptRow label="You Receive" value={`${swapUnits(quote.receiveAmount, receive)} ${receive.sym}`} coin={receive} testID="wallet-receipt-receive" />
               <Divider />
               <ReceiptRow label="Swap fee" value={`${swapUnits(quote.feeAmount ?? quote.amount * SWAP_FEE, pay)} ${pay.sym}`} sub={`${SWAP_FEE_LABEL} · included in quote`} testID="wallet-receipt-fee" />
-              <Divider />
-              <ReceiptRow label="Network fee" value="0" sub="Internal account swap · no on-chain transaction" rowTestID="wallet-swap-receipt-footer-last-row" />
             </View>
         </ScrollView>
       </View>

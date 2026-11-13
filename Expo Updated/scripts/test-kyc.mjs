@@ -56,11 +56,12 @@ test('KYC fields keep red borders without inline errors and results default to a
   assert.ok(byId(result, 'kyc-result-pending'));
   assert.equal(nodes(result).some(n => n.props.children?.includes('Simulated outcome')), false);
 });
-function screen(api = {}, picker = async () => photo) {
+function screen(api = {}, picker = async () => photo, initialResource = {}) {
   const h = hooks(), toasts = [], dismissed = [], submissions = [], routes = [];
-  const resource = { data: { status: 'not_submitted' }, reload: async () => {}, error: null };
+  const resource = { data: { status: 'not_submitted' }, loading: false, reload: async () => {}, error: null, ...initialResource };
   h.native.AppState.currentState = 'active';
   const { KycScreen } = load('../components/kyc/KycScreen.tsx', {
+    '@/components/BackendScreenState': { BackendScreenState: 'BackendScreenState' },
     react: h.react, 'react-native': h.native, '@expo/vector-icons': { Feather: 'Feather' },
     'expo-router': { router: { canGoBack: () => false, replace: route => routes.push(route) } },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
@@ -91,6 +92,35 @@ async function reachFace(a) {
   await a.type('PhotoSlot').onPick('library'); a.render(); await a.press('kyc-next');
   await a.type('PhotoSlot').onPick('camera'); a.render(); await a.press('kyc-next');
 }
+for (const status of ['pending', 'approved', 'rejected', 'unverified']) {
+  test(`KYC hides onboarding until the delayed backend status resolves to ${status}`, async () => {
+    const response = deferred();
+    const a = screen({}, undefined, { data: null, loading: true });
+    assert.ok(a.id('kyc-loading'));
+    assert.equal(a.id('kyc-start'), undefined);
+    const request = response.promise.then(data => {
+      a.resource.data = data; a.resource.loading = false;
+    });
+    response.resolve({ status, id_type: 'passport' });
+    await request;
+    a.render(); a.render();
+    if (status === 'unverified') assert.ok(a.id('kyc-start'));
+    else {
+      assert.equal(a.id('kyc-start'), undefined);
+      assert.equal(a.type('ResultStep').status, status);
+    }
+    a.unmount();
+  });
+}
+test('a failed KYC status request shows retry instead of starting onboarding', async () => {
+  let retried = 0;
+  const a = screen({}, undefined, { data: null, error: 'Backend unavailable', reload: async () => { retried++; } });
+  assert.equal(a.id('kyc-start'), undefined);
+  assert.equal(a.id('kyc-loading').error, 'Backend unavailable');
+  a.id('kyc-loading').onRetry();
+  assert.equal(retried, 1);
+  a.unmount();
+});
 test('mandatory identity fields, real dates, residence and selfie encoding remain validated', () => {
   assert.equal(Object.keys(model.validatePersonal(model.EMPTY_PERSONAL)).length, 6);
   assert.equal(Object.keys(model.validatePersonal(personal)).length, 0);

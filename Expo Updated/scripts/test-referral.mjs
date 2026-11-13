@@ -11,6 +11,7 @@ function harness({ platform = 'web', share, copy, history = false } = {}) {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
     useRef: value => ({ current: value }),
     useState: value => [value, () => {}],
+    useEffect() {},
   };
   const dependencies = {
     react,
@@ -30,6 +31,12 @@ function harness({ platform = 'web', share, copy, history = false } = {}) {
     '@/hooks/useColors': { useColors: () => ({ walletBlue: [] }) },
     '@/components/toast/ToastProvider': { useToast: () => ({ showToast: notice => notices.push(notice) }) },
     '@/utils/clipboard': { copyText: copy ?? (async () => {}) },
+    '@/services/api': { referralApi: { stats() {} } },
+    '@/hooks/useBackendResource': { useBackendResource: () => ({ data: {
+      referralCode: '93q74093', referralLink: 'https://example.test/register?ref=93q74093',
+      totalReferrals: 15, config: { unverifiedReward: 5, verifiedReward: 10 },
+      referrals: Array.from({ length: 15 }, (_, index) => ({ kyc_status: index < 10 ? 'approved' : 'unverified' })),
+    }, error: null }) },
   };
   const source = fs.readFileSync(new URL('../components/referral/ReferralScreen.tsx', import.meta.url), 'utf8');
   const code = ts.transpileModule(source, { compilerOptions: {
@@ -52,7 +59,7 @@ function harness({ platform = 'web', share, copy, history = false } = {}) {
   return { notices, routes, nodes, button: id => nodes.find(node => node.props.testID === id).props };
 }
 
-test('shows the requested rewards, referral counts and exact user-provided code', () => {
+test('shows backend-configured rewards, referral counts and referral code', () => {
   const app = harness();
   const labels = app.nodes.map(node => node.props.accessibilityLabel);
   for (const label of ['Sign Up Reward: 5 AT', 'KYC Reward: 10 AT', 'Unverified\nReferrals: 5', 'Verified\nReferrals: 10', 'Total\nReferrals: 15']) {
@@ -60,6 +67,15 @@ test('shows the requested rewards, referral counts and exact user-provided code'
   }
   assert.equal(app.button('referral-code').children[0], '93q74093');
   assert.equal(app.nodes.some(node => node.props.children?.includes('Preview figures — nothing has been credited')), false);
+});
+
+test('explains automatic sign-up credit after first mining and separate approved KYC reward', () => {
+  const app = harness();
+  const text = app.button('referral-reward-conditions').children.join('');
+  assert.match(text, /automatically credited after your referred friend mines for the first time/);
+  assert.match(text, /not when they create an account/);
+  assert.match(text, /KYC reward is separate/);
+  assert.match(text, /KYC is approved/);
 });
 
 test('centers the scrollable content and keeps the invite in a separate bottom bar', () => {

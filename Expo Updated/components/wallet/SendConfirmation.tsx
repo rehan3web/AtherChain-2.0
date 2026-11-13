@@ -9,7 +9,7 @@ import { SlideConfirm } from './SlideConfirm';
 export type SendDraft = { recipient: TransferRecipient; amount: number; note: string };
 export const SEND_METHOD_LABELS = { email: 'Email', username: 'Username', address: 'Address' } as const;
 
-export function SendConfirmation({ draft, money, status, error, attempt, demo, onConfirm }: {
+export function SendConfirmation({ draft, money, status, attempt, demo, onConfirm }: {
   draft: SendDraft; money: Money; status: 'idle' | 'pending' | 'confirmed';
   error: string | null; attempt: number; demo?: boolean; onConfirm: () => void;
 }) {
@@ -28,7 +28,6 @@ export function SendConfirmation({ draft, money, status, error, attempt, demo, o
         <SendDetail label="Fee" value="0" last />
       </View>
       <View style={styles.footer}>
-        {error && <Text testID="wallet-send-confirm-error" accessibilityRole="alert" style={[styles.note, { color: c.walletError }]}>{error}</Text>}
         {demo && <Text style={[styles.note, { color: c.walletSubtle, textAlign: 'center' }]}>Demo transfer only. No real money moves.</Text>}
         <SlideConfirm
           key={attempt}

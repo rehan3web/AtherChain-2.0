@@ -22,6 +22,7 @@ import { refreshBackendData } from '@/services/refresh';
 import { useBackendResource } from '@/hooks/useBackendResource';
 import { useToast } from '@/components/toast/ToastProvider';
 import { COUNTRIES } from './countries';
+import { BackendScreenState } from '@/components/BackendScreenState';
 
 export function KycScreen() {
   const c = useColors();
@@ -36,10 +37,11 @@ export function KycScreen() {
   const clearFailure = () => { if (failureToast.current !== null) dismissToast(failureToast.current); failureToast.current = null; };
   const resource = useBackendResource(kycApi.status);
   const hydrated = useRef(false);
+  const [statusReady, setStatusReady] = useState(false);
   useEffect(() => {
     if (hydrated.current && step !== 7) return;
     const status = resource.data?.status;
-    if (resource.data) hydrated.current = true;
+    if (resource.data) { hydrated.current = true; setStatusReady(true); }
     if (['pending', 'rejected', 'approved'].includes(status)) {
       setReviewStatus(status);
       setStep(7);
@@ -197,6 +199,10 @@ export function KycScreen() {
 
   const top = (Platform.OS === 'web' ? 67 : insets.top) + 8;
   const bottom = Math.max(20, insets.bottom, Platform.OS === 'web' ? 34 : 0);
+  if (!statusReady || ((step === 0 || step === 7) && (resource.loading || resource.error))) {
+    return <BackendScreenState testID="kyc-loading" error={resource.loading ? null : resource.error}
+      onRetry={() => { void resource.reload(); }} onBack={exit} />;
+  }
   if (step === 6) {
     return <FaceStep submitting={busy} onBack={goBack} onCaptured={submitFace} />;
   }

@@ -31,7 +31,10 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
       throw new Error('The backend returned an invalid swap rate.');
     if (profile.at_balance == null || !Number.isFinite(Number(profile.at_balance)) || Number(profile.at_balance) < 0)
       throw new Error('The backend returned an invalid AT balance.');
-    return { rate: Number(settings.rate), balance: Number(profile.at_balance), active: settings.active === true };
+    const cooldownUntil = settings.cooldown_enabled !== false && profile.next_swap_at
+      ? new Date(profile.next_swap_at).getTime() : 0;
+    if (!Number.isFinite(cooldownUntil)) throw new Error('The backend returned an invalid swap cooldown.');
+    return { rate: Number(settings.rate), balance: Number(profile.at_balance), active: settings.active === true, cooldownUntil };
   });
   const balance = resource.data?.balance ?? Number.NaN;
   const rate = resource.data?.rate;
@@ -44,6 +47,23 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
   const [done, setDone] = useState(false);
   const [swapStatus, setSwapStatus] = useState<'idle' | 'pending' | 'confirmed'>('idle');
   const [attempt, setAttempt] = useState(0);
+  const [now, setNow] = useState(Date.now);
+  const cooldownUntil = resource.data?.cooldownUntil ?? 0;
+  const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
+  const cooldownLabel = `Cooldown ${String(Math.floor(cooldownSeconds / 3600)).padStart(2, '0')}:${String(Math.floor(cooldownSeconds / 60) % 60).padStart(2, '0')}:${String(cooldownSeconds % 60).padStart(2, '0')}`;
+  useEffect(() => {
+    setNow(Date.now());
+    if (cooldownUntil <= Date.now()) return;
+    const timer = setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= cooldownUntil) {
+        clearInterval(timer);
+        void resource.reload();
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownUntil, resource.reload]);
   const receiptCallback = useRef(onReceipt);
   receiptCallback.current = onReceipt;
   const entrance = useRef(new Animated.Value(0)).current;
@@ -54,7 +74,7 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
   const hasBalance = Number.isFinite(balance) && balance >= 0;
   const limitCents = hasBalance ? Math.max(0, Math.floor(balance * 100 + 1e-6)) : 0;
   const over = cents > limitCents;
-  const valid = hasBalance && cents > 0 && !over && resource.data?.active === true;
+  const valid = hasBalance && cents > 0 && !over && resource.data?.active === true && cooldownSeconds === 0;
   const shown = showRaw(raw, m);
   const quoteSnapshot = useRef<{ pay: SwapCoin; receive: SwapCoin; quote: ReturnType<typeof swapQuote> } | null>(null);
   const completedReceipt = useRef<SwapReceiptData | null>(null);
@@ -225,12 +245,13 @@ export function SwapSheet({ balance: _walletBalance, onReviewChange, onReceipt, 
           onPress={openReview}
           disabled={!valid}
           accessibilityRole="button"
-          accessibilityLabel="Swap"
+          accessibilityLabel={cooldownSeconds > 0 ? cooldownLabel : 'Swap'}
           accessibilityState={{ disabled: !valid }}
           testID="wallet-swap-review"
           style={[styles.button, { backgroundColor: valid ? c.walletInk : c.walletDisabled }]}
         >
-          <Text style={[styles.buttonText, { color: c.walletOnInk }]}>Swap</Text><Feather name="arrow-right" size={18} color={c.walletOnInk} />
+          <Text testID={cooldownSeconds > 0 ? 'wallet-swap-cooldown' : undefined} style={[styles.buttonText, { color: c.walletOnInk }]}>{cooldownSeconds > 0 ? cooldownLabel : 'Swap'}</Text>
+          {cooldownSeconds === 0 && <Feather name="arrow-right" size={18} color={c.walletOnInk} />}
         </ScalePressable>
       </View>
     </View>

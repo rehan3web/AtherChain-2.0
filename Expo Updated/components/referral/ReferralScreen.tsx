@@ -104,9 +104,6 @@ export function ReferralScreen() {
         contentContainerStyle={styles.content}>
         <View style={styles.art} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><InviteArt /></View>
         <Text style={[styles.title, { color: c.walletInk }]}>Invite friends,{'\n'}grow the community</Text>
-        <Text testID="referral-reward-conditions" style={[styles.intro, { color: c.walletSubtle }]}>
-          Share AtherChain with people you trust. Your sign-up reward is automatically credited after your referred friend mines for the first time—not when they create an account. The KYC reward is separate and is credited when their KYC is approved.
-        </Text>
 
         <View style={[styles.card, { backgroundColor: c.walletSurfaceTop, borderColor: c.walletDisabled }]}>
           <View style={styles.row}>
@@ -137,6 +134,10 @@ export function ReferralScreen() {
             </Pressable>
           </View>
         </View>
+        <Text testID="referral-reward-conditions" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
+          style={[styles.rewardNote, { color: c.walletSubtle }]}>
+          Sign-up reward auto-credits after your friend’s first mining.
+        </Text>
       </ScrollView>
       <View testID="referral-bottom-bar" style={[styles.bottomBar, { backgroundColor: c.walletCardTop, borderTopColor: c.walletDisabled, paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Pressable onPress={invite} disabled={busy} testID="referral-invite" accessibilityRole="button"
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', width: '100%', maxWidth: 520, alignSelf: 'center', paddingHorizontal: 20, paddingVertical: 24 },
   art: { alignItems: 'center', marginBottom: 12 },
   title: { fontSize: 26, lineHeight: 32, fontFamily: 'DMSans_600SemiBold', letterSpacing: -0.8, textAlign: 'center' },
-  intro: { fontSize: 14, lineHeight: 21, fontFamily: 'DMSans_400Regular', textAlign: 'center', marginTop: 10, paddingHorizontal: 8 },
+  rewardNote: { width: '100%', fontSize: 11, lineHeight: 17, fontFamily: 'DMSans_400Regular', textAlign: 'center', marginTop: 10 },
   card: { width: '100%', marginTop: 14, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 6 },
   row: { flexDirection: 'row', alignItems: 'stretch' },
   stat: { flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, gap: 4 },

@@ -69,13 +69,16 @@ test('shows backend-configured rewards, referral counts and referral code', () =
   assert.equal(app.nodes.some(node => node.props.children?.includes('Preview figures — nothing has been credited')), false);
 });
 
-test('explains automatic sign-up credit after first mining and separate approved KYC reward', () => {
+test('shows a short single-line first-mining condition below the referral code', () => {
   const app = harness();
-  const text = app.button('referral-reward-conditions').children.join('');
-  assert.match(text, /automatically credited after your referred friend mines for the first time/);
-  assert.match(text, /not when they create an account/);
-  assert.match(text, /KYC reward is separate/);
-  assert.match(text, /KYC is approved/);
+  const note = app.button('referral-reward-conditions');
+  assert.equal(note.children.join(''), 'Sign-up reward auto-credits after your friend’s first mining.');
+  assert.equal(note.numberOfLines, 1);
+  assert.equal(note.style[0].textAlign, 'center');
+  const scroll = app.nodes.find(node => node.type === 'ScrollView');
+  const children = scroll.props.children.filter(Boolean);
+  assert.equal(children.at(-2).props.testID, 'referral-code-row');
+  assert.equal(children.at(-1).props.testID, 'referral-reward-conditions');
 });
 
 test('centers the scrollable content and keeps the invite in a separate bottom bar', () => {
@@ -94,7 +97,7 @@ test('centers the scrollable content and keeps the invite in a separate bottom b
   const copyStyles = Object.assign({}, ...app.button('referral-copy-code').style({ pressed: false }));
   assert.equal(copyStyles.backgroundColor, undefined);
   assert.equal(copyStyles.borderRadius, undefined);
-  assert.equal(scroll.props.children.at(-1).props.testID, 'referral-code-row');
+  assert.equal(scroll.props.children.at(-1).props.testID, 'referral-reward-conditions');
 });
 
 test('code copy copies only the exact referral code on web and native', async () => {

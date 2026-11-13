@@ -107,8 +107,10 @@ export function RecoveryOtp({ email, verify, resend, onVerified, onBack }: {
     </View>
     <NumericKeypad hideDecimal testIDPrefix="recovery-key" onKey={onKey}
       disabled={saving || resending || phase !== 'entry'} onClear={() => { if (!busy.current && phase === 'entry') setCode(''); }} />
-    <PrimaryButton testID="recovery-resend" variant="ghost" loading={resending}
-      label={resendIn > 0 ? `Resend code in ${resendIn}s` : 'Resend code'}
-      disabled={saving || phase !== 'entry' || resendIn > 0} onPress={() => { void sendAgain(); }} />
+    <View style={{ marginTop: 16 }}>
+      <PrimaryButton testID="recovery-resend" variant="ghost" loading={resending}
+        label={resendIn > 0 ? `Resend code in ${resendIn}s` : 'Resend code'}
+        disabled={saving || phase !== 'entry' || resendIn > 0} onPress={() => { void sendAgain(); }} />
+    </View>
   </Shell>;
 }

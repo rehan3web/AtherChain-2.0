@@ -120,6 +120,29 @@ export function ScanLoginScreen() {
     else if (!granted) status = 'Waiting for camera access.';
   }
 
+  // Replace the entire scanner tree, not an overlay above the camera or frame.
+  if (done) return (
+    <View style={st.root} testID="scan-screen">
+      <View style={[st.header, { paddingTop: insets.top + 10 }]}>
+        <Pressable testID="scan-back" onPress={leave} accessibilityRole="button" accessibilityLabel="Close scanner" hitSlop={8}
+          style={({ pressed }) => [st.close, pressed && { opacity: 0.7 }]}>
+          <Feather name="x" size={22} color={INK} />
+        </Pressable>
+      </View>
+      <View testID="scan-success-mark" pointerEvents="none" style={st.frameWrap}>
+        <CodeCircles key="scan-approved-animation" filled={6} phase="success" onFinished={() => {}} />
+      </View>
+      <View testID="scan-success" style={[st.bottom, st.block, { paddingBottom: insets.bottom + 28 }]}>
+        <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={st.title}>Scan Completed</Text>
+        <Text style={st.body}>The browser sign-in was approved by AtherChain.</Text>
+        <Pressable testID="scan-done" onPress={leave} accessibilityRole="button" accessibilityLabel="Done, return to dashboard"
+          style={({ pressed }) => [st.primary, pressed && { transform: [{ scale: 0.98 }] }]}>
+          <Text style={st.primaryText}>Done</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
   return (
     <View style={st.root} testID="scan-screen">
       {showCamera ? (
@@ -127,9 +150,7 @@ export function ScanLoginScreen() {
           barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={({ data }) => { void approve(data); }}
           onMountError={e => setCamError(e?.message ? `Camera unavailable: ${e.message}` : 'Camera unavailable on this device.')} />
       ) : (
-        <LinearGradient colors={['#3A3632', BASE]} style={[StyleSheet.absoluteFill, st.center]}>
-          {!done && <Feather name="monitor" size={110} color="rgba(246,243,238,0.10)" />}
-        </LinearGradient>
+        <LinearGradient colors={['#3A3632', BASE]} style={[StyleSheet.absoluteFill, st.center]} />
       )}
       <LinearGradient pointerEvents="none" colors={['rgba(20,18,16,0.55)', 'transparent']} style={[st.top, { height: insets.top + 120 }]} />
       <LinearGradient pointerEvents="none" colors={['transparent', 'rgba(20,18,16,0.92)']} style={st.bottomFade} />
@@ -142,11 +163,7 @@ export function ScanLoginScreen() {
       </View>
 
       <View pointerEvents="none" style={st.frameWrap}>
-        {done ? (
-          <View testID="scan-success-mark" style={st.center}>
-            <CodeCircles filled={6} phase="success" onFinished={() => {}} />
-          </View>
-        ) : <View testID="scan-frame" style={st.frame}>
+        <View testID="scan-frame" style={st.frame}>
           <View style={[st.corner, { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 6 }]} />
           <View style={[st.corner, { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 6 }]} />
           <View style={[st.corner, { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 6 }]} />
@@ -157,26 +174,15 @@ export function ScanLoginScreen() {
               <ActivityIndicator size="large" color={INK} accessibilityLabel="Approving browser sign-in" />
             </View>
           )}
-        </View>}
+        </View>
       </View>
 
       <View style={[st.bottom, { paddingBottom: insets.bottom + 28 }]}>
-        {done ? (
-          <View testID="scan-success" style={st.block}>
-            <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={st.title}>Scan Completed</Text>
-            <Text style={st.body}>The browser sign-in was approved by AtherChain.</Text>
-            <Pressable testID="scan-done" onPress={leave} accessibilityRole="button" accessibilityLabel="Done, return to dashboard"
-              style={({ pressed }) => [st.primary, pressed && { transform: [{ scale: 0.98 }] }]}>
-              <Text style={st.primaryText}>Done</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View testID="scan-scanning" style={st.block}>
+        <View testID="scan-scanning" style={st.block}>
             <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={st.title}>Scanning…</Text>
             <Text style={st.body}>Hold the web login code inside the frame.</Text>
             {!!status && <Text style={st.statusText}>{status}</Text>}
-          </View>
-        )}
+        </View>
       </View>
     </View>
   );

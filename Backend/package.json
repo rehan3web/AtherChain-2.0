@@ -8,7 +8,7 @@
     "dev": "nodemon src/index.ts --host 0.0.0.0",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test:centralized": "node --test scripts/test-centralized.cjs scripts/test-ledger-*.cjs scripts/test-auth-recovery.cjs"
+    "test:centralized": "node --test scripts/test-centralized.cjs scripts/test-ledger-*.cjs scripts/test-auth-recovery.cjs scripts/test-password-recovery.cjs"
   },
   "keywords": [],
   "author": "",

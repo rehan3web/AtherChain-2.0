@@ -6,8 +6,11 @@ import { PasskeyController } from '../controllers/passkeyController';
 import { SessionController } from '../controllers/sessionController';
 import { QRAuthController } from '../controllers/qrAuthController';
 import { auth } from '../middlewares/auth';
+import { rateLimit } from '../middlewares/rateLimit';
 
 const router = Router();
+router.use(['/forgot-password', '/verify-reset-otp', '/reset-password', '/start-2fa-recovery', '/verify-2fa-recovery'],
+    rateLimit({ windowSeconds: 900, max: 40, bucket: 'account-recovery' }));
 
 router.post('/register', register);
 router.post('/login', login);

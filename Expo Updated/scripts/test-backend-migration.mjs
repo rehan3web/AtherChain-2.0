@@ -217,6 +217,25 @@ test('security, sessions, referrals, profile and inbox use real endpoints', asyn
   ]);
 });
 
+test('account recovery uses public POST endpoints and the exact backend field names', async () => {
+  const { api, calls } = apiHarness();
+  await api.authApi.forgotPassword('owner@test.example');
+  await api.authApi.verifyResetOTP('owner@test.example', '123456');
+  await api.authApi.resetPassword('owner@test.example', '123456', 'new-fixture-password');
+  await api.authApi.start2FARecovery('owner@test.example');
+  await api.authApi.verify2FARecovery('fixture-owner', '123456');
+  assert.deepEqual(calls.map(call => call.url), [
+    '/api/auth/forgot-password', '/api/auth/verify-reset-otp', '/api/auth/reset-password',
+    '/api/auth/start-2fa-recovery', '/api/auth/verify-2fa-recovery',
+  ]);
+  assert.deepEqual(calls.map(call => JSON.parse(call.body)), [
+    { email: 'owner@test.example' }, { email: 'owner@test.example', token: '123456' },
+    { email: 'owner@test.example', token: '123456', newPassword: 'new-fixture-password' },
+    { email: 'owner@test.example' }, { userId: 'fixture-owner', otp: '123456' },
+  ]);
+  assert.ok(calls.every(call => call.method === 'POST' && !call.headers.Authorization));
+});
+
 test('transaction history loads all backend pages, not fabricated local records', async () => {
   const pages = [];
   const transactions = load('../services/transactions.ts', {

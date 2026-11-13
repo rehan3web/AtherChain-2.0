@@ -152,6 +152,8 @@ export const authApi = {
   verifyResetOTP: (email: string, token: string) => post('/auth/verify-reset-otp', { email, token }, true),
   resetPassword: (email: string, token: string, newPassword: string) =>
     post('/auth/reset-password', { email, token, newPassword }, true),
+  start2FARecovery: (email: string) => post('/auth/start-2fa-recovery', { email }, true),
+  verify2FARecovery: (userId: string, otp: string) => post('/auth/verify-2fa-recovery', { userId, otp }, true),
   getSessions: () => request('/auth/sessions'),
   removeSession: (id: string) => request(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   removeSessionManaged: (id: string, managementToken: string) =>

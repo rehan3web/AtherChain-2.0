@@ -64,6 +64,7 @@ function loginHarness(login) {
     '@/services/passkeys': {},
     '@/components/toast/ToastProvider': { useToast: () => ({ showToast() {} }) },
     './SessionLimitSheet': { SessionLimitSheet: 'SessionLimitSheet' },
+    './RecoveryScreen': { RecoveryScreen: 'Recovery' },
     './sessionLimit': load('../components/onboarding/sessionLimit.ts', {}),
   });
   let tree;

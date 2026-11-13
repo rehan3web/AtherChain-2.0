@@ -60,6 +60,9 @@ test('real backend approval replaces the scanner with the exact OTP success anim
   assert.equal(byId(tree, 'scan-camera'), undefined);
   assert.equal(byId(tree, 'scan-frame'), undefined);
   assert.equal(byId(tree, 'scan-approving'), undefined);
+  assert.equal(byId(tree, 'scan-line'), undefined);
+  assert.equal(byType(tree, 'LinearGradient'), undefined, 'Success must replace all scanner backdrop layers');
+  assert.equal(nodes(tree).some(node => node.type === 'Feather' && node.props.name === 'monitor'), false);
   const animation = byType(tree, 'OtpSuccessAnimation');
   assert.equal(animation.props.phase, 'success');
   assert.equal(animation.props.filled, 6);
@@ -69,6 +72,11 @@ test('real backend approval replaces the scanner with the exact OTP success anim
   assert.deepEqual(app.navigation, [], 'Success remains visible until Done is pressed');
   byId(tree, 'scan-done').props.onPress();
   assert.deepEqual(app.navigation, ['back']);
+});
+
+test('scanner fallback has no decorative monitor behind its QR frame', () => {
+  const app = scanner();
+  assert.equal(nodes(app.render()).some(node => node.type === 'Feather' && node.props.name === 'monitor'), false);
 });
 
 for (const result of ['reject', 'unsuccessful']) {

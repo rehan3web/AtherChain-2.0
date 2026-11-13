@@ -43,7 +43,10 @@ function harness() {
     const common = { jsonwebtoken: jwt, '../config/env': { env: { JWT_SECRET: secret, RP_ID: 'localhost' } },
         '../db/redis': redis, '../db/postgres': postgres };
     const recovery = load('src/services/sessionRecovery.ts', common);
-    const dependencies = { ...common, '../services/sessionRecovery': recovery };
+    const dependencies = { ...common, '../services/sessionRecovery': recovery,
+        '../services/recoveryOtp': load('src/services/recoveryOtp.ts', {
+            'node:crypto': require('node:crypto'), '../db/redis': redis,
+        }) };
     const controller = load('src/controllers/sessionController.ts', dependencies).SessionController;
     const middleware = load('src/middlewares/auth.ts', dependencies).auth;
     const auth = load('src/controllers/auth.ts', { ...dependencies, bcryptjs: {}, uuid: { v4: () => 'new-session' },

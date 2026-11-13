@@ -11,6 +11,7 @@ import { getCredential } from '@/services/passkeys';
 import { useToast } from '@/components/toast/ToastProvider';
 import { SessionLimitSheet } from './SessionLimitSheet';
 import { readSessionLimit, type SessionLimit } from './sessionLimit';
+import { RecoveryScreen, type RecoveryKind } from './RecoveryScreen';
 
 type Step = 'identifier' | 'password' | 'passkey';
 
@@ -18,6 +19,7 @@ export function LoginScreen() {
   const { showToast } = useToast();
   const session = useDemoSession();
   const [step, setStep] = useState<Step>('identifier');
+  const [recovery, setRecovery] = useState<RecoveryKind | null>(null);
   const [dir, setDir] = useState<1 | -1>(1);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -191,12 +193,25 @@ export function LoginScreen() {
     set(v); if (errors[key]) setErrors(p => { const n = { ...p }; delete n[key]; return n; });
   };
   const disabled = saving || session.pending;
+  const openRecovery = (kind: RecoveryKind) => {
+    if (busy.current || disabled) return;
+    setPassword(''); setChallenge(null); setErrors({}); setLimit(null); pending.current = null;
+    setRecovery(kind);
+  };
+
+  if (recovery) return <RecoveryScreen kind={recovery} initialEmail={identifier}
+    onBack={() => { setRecovery(null); setStep('identifier'); }}
+    onDone={() => { clear(); setStep('identifier'); setRecovery(null); }} />;
 
   const footer = step === 'identifier' ? <>
     <PrimaryButton testID="login-next" label="Next" onPress={() => goTo('password')} />
     <PrimaryButton testID="login-passkey" variant="ghost" label="Login with passkey" onPress={() => goTo('passkey')} />
+    <PrimaryButton testID="login-forgot-password" variant="ghost" label="Forgot password?" disabled={disabled} onPress={() => openRecovery('password')} />
+    <PrimaryButton testID="login-reset-twofa" variant="ghost" label="Reset 2FA" disabled={disabled} onPress={() => openRecovery('twofa')} />
   </> : step === 'password' ? <>
     <PrimaryButton testID="login-submit" label={challenge ? 'Verify code' : 'Login'} loading={saving} disabled={disabled} onPress={submit} />
+    <PrimaryButton testID="login-forgot-password" variant="ghost" label="Forgot password?" disabled={disabled} onPress={() => openRecovery('password')} />
+    <PrimaryButton testID="login-reset-twofa" variant="ghost" label="Reset 2FA" disabled={disabled} onPress={() => openRecovery('twofa')} />
   </> : <>
     <PrimaryButton testID="login-passkey-confirm" label="Confirm passkey" loading={saving} disabled={disabled} onPress={open} />
     <PrimaryButton testID="login-passkey-cancel" variant="ghost" label="Cancel" disabled={saving} onPress={back} />

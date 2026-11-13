@@ -13,6 +13,14 @@ import { emailService } from '../services/emailService';
 
 import { FingerprintModel } from '../models/fingerprint';
 import { getSessionRecovery } from '../services/sessionRecovery';
+import { checkRecoveryOTP, sendRecoveryOTP, revokeRecoverySessions, RecoveryError } from '../services/recoveryOtp';
+
+const recoveryEmail = (value: unknown) => typeof value === 'string' ? value.trim().toLowerCase() : '';
+const validRecoveryEmail = (email: string) => email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const recoveryFailure = (res: Response, error: unknown, fallback: string) =>
+    res.status(error instanceof RecoveryError ? error.status : 500).json({
+        message: error instanceof RecoveryError ? error.message : fallback,
+    });
 
 export const register = async (req: Request, res: Response) => {
     try {
@@ -373,62 +381,62 @@ export const resendOTP = async (req: Request, res: Response) => {
 
 export const forgotPassword = async (req: Request, res: Response) => {
     try {
-        const { email } = req.body;
+        const email = recoveryEmail(req.body?.email);
+        if (!validRecoveryEmail(email)) return res.status(400).json({ message: 'Enter a valid email address.' });
         const user = await UserModel.findByEmail(email);
 
         // Fail silently for security? Or give feedback?
         // Let's give feedback for now as per friendly UX request
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
-
-        await query('UPDATE users SET reset_token = $1, reset_expires_at = $2 WHERE id = $3', [otp, expires, user.id]);
-
-        await emailService.sendPasswordResetOTP(email, otp);
+        await sendRecoveryOTP('password', user, (to, code) => emailService.sendPasswordResetOTP(to, code));
 
         res.json({ message: 'Password reset code sent to your email.' });
     } catch (error) {
         console.error('Forgot Password Error:', error);
-        res.status(500).json({ message: 'Failed to process request' });
+        return recoveryFailure(res, error, 'Failed to send recovery code. Please retry.');
     }
 };
 
 export const verifyResetOTP = async (req: Request, res: Response) => {
     try {
-        const { email, token } = req.body;
+        const email = recoveryEmail(req.body?.email);
+        const { token } = req.body;
+        if (!validRecoveryEmail(email)) return res.status(400).json({ message: 'Enter a valid email address.' });
         const user = await UserModel.findByEmail(email);
 
         if (!user) return res.status(404).json({ message: 'User not found' });
-        if (!user.reset_token || user.reset_token !== token) return res.status(400).json({ message: 'Invalid verification code' });
-        if (new Date() > new Date(user.reset_expires_at)) return res.status(400).json({ message: 'Token expired' });
+        await checkRecoveryOTP('password', user.id, token);
 
         res.json({ message: 'Code verified successfully' });
     } catch (error) {
         console.error('Verify Reset OTP Error:', error);
-        res.status(500).json({ message: 'Failed to verify code' });
+        return recoveryFailure(res, error, 'Failed to verify code');
     }
 };
 
 export const resetPassword = async (req: Request, res: Response) => {
     try {
-        const { email, token, newPassword } = req.body;
+        const email = recoveryEmail(req.body?.email);
+        const { token, newPassword } = req.body;
+        if (!validRecoveryEmail(email)) return res.status(400).json({ message: 'Enter a valid email address.' });
+        if (typeof newPassword !== 'string' || newPassword.trim().length < 8 || newPassword.length > 128)
+            return res.status(400).json({ message: 'Use a password with 8–128 characters.' });
         const user = await UserModel.findByEmail(email);
 
         if (!user) return res.status(404).json({ message: 'User not found' });
-        if (!user.reset_token || user.reset_token !== token) return res.status(400).json({ message: 'Invalid verification code' });
-        if (new Date() > new Date(user.reset_expires_at)) return res.status(400).json({ message: 'Token expired' });
-
+        await checkRecoveryOTP('password', user.id, token);
         const hash = await bcrypt.hash(newPassword, 10);
+        await checkRecoveryOTP('password', user.id, token, true);
         await query('UPDATE users SET password_hash = $1, reset_token = NULL, reset_expires_at = NULL WHERE id = $2', [hash, user.id]);
 
         // Invalidate sessions
-        await redis.del(`session:${user.id}`);
+        await revokeRecoverySessions(user.id);
 
         res.json({ message: 'Password reset successfully' });
     } catch (error) {
         console.error('Reset Password Error:', error);
-        res.status(500).json({ message: 'Failed to reset password' });
+        return recoveryFailure(res, error, 'Failed to reset password. Request a new code before retrying.');
     }
 };
 
@@ -519,10 +527,11 @@ export const resendSuspiciousOTP = async (req: Request, res: Response) => {
 export const start2FARecovery = async (req: Request, res: Response) => {
     try {
         const { userId } = req.body;
-        if (!userId) return res.status(400).json({ message: 'User ID is required' });
-
-        const user = await UserModel.findById(userId);
+        const email = recoveryEmail(req.body?.email);
+        if (!userId && !validRecoveryEmail(email)) return res.status(400).json({ message: 'Enter a valid email address.' });
+        const user = userId ? await UserModel.findById(userId) : await UserModel.findByEmail(email);
         if (!user) return res.status(404).json({ message: 'User not found' });
+        if (!user.twofa_enabled) return res.status(400).json({ message: '2FA is not enabled. Please log in normally.' });
 
         // Mask email: r***n@gmail.com
         const [local, domain] = user.email.split('@');
@@ -530,21 +539,16 @@ export const start2FARecovery = async (req: Request, res: Response) => {
         const maskedEmail = `${maskedLocal}@${domain}`;
 
         // Generate OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-
-        await query('UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE id = $3', [otp, otpExpires, user.id]);
-
-        // Send Email
-        await emailService.send2FAResetOTP(user.email, otp);
+        await sendRecoveryOTP('twofa', user, (to, code) => emailService.send2FAResetOTP(to, code));
 
         res.json({
             message: 'Verification code sent to your email.',
+            userId: user.id,
             maskedEmail: maskedEmail
         });
     } catch (error) {
         console.error('Start 2FA Recovery Error:', error);
-        res.status(500).json({ message: 'Failed to start recovery process' });
+        return recoveryFailure(res, error, 'Failed to send recovery code. Please retry.');
     }
 };
 
@@ -556,48 +560,16 @@ export const verify2FARecovery = async (req: Request, res: Response) => {
         const user = await UserModel.findById(userId);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // Verify OTP
-        if (!user.otp_code || !user.otp_expires_at) return res.status(400).json({ message: 'No recovery request found' });
-        if (new Date() > new Date(user.otp_expires_at)) return res.status(400).json({ message: 'OTP expired' });
-        if (user.otp_code !== otp) return res.status(400).json({ message: 'Invalid OTP' });
+        await checkRecoveryOTP('twofa', user.id, otp, true);
 
         // Disable 2FA
-        await query('UPDATE users SET twofa_enabled = FALSE, twofa_secret = NULL, otp_code = NULL, otp_expires_at = NULL WHERE id = $1', [user.id]);
+        await query('UPDATE users SET twofa_enabled = FALSE, twofa_secret = NULL WHERE id = $1', [user.id]);
 
-        // The user can now login again normally. 
-        // We could also auto-login here by generating a token.
-        // Let's generate a token to make it smoother ("System automatically disables existing 2FA ... User session continues login").
-
-        const userAgent = req.headers['user-agent'] || 'Unknown Device';
-        const ip = req.ip || req.socket.remoteAddress || 'Unknown IP';
-        const sessionId = uuidv4();
-        const token = jwt.sign(
-            { id: user.id, role: user.role, sessionId },
-            env.JWT_SECRET,
-            { expiresIn: '7d' }
-        );
-
-        const sessionData = {
-            device: userAgent,
-            ip: String(ip),
-            location: 'Unknown',
-            loginTime: new Date().toISOString(),
-            lastActive: new Date().toISOString(),
-            token: token
-        };
-
-        await redis.hmset(`session:${sessionId}`, sessionData);
-        await redis.expire(`session:${sessionId}`, 7 * 24 * 60 * 60);
-        await redis.sadd(`user_sessions:${user.id}`, sessionId);
-
-        res.json({
-            message: '2FA has been disabled. Login successful.',
-            token: token,
-            user: { id: user.id, username: user.username, role: user.role }
-        });
+        await revokeRecoverySessions(user.id);
+        res.json({ message: '2FA reset successfully. Please log in again.' });
     } catch (error) {
         console.error('Verify 2FA Recovery Error:', error);
-        res.status(500).json({ message: 'Verification failed' });
+        return recoveryFailure(res, error, 'Failed to reset 2FA. Request a new code before retrying.');
     }
 };
 

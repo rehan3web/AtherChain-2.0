@@ -36,6 +36,7 @@ function app(kind, api = {}, complete = async () => {}) {
     './SignupFields': { AuthField: 'Field', PasswordField: 'Field', PhoneField: 'Phone', SelectField: 'Select' },
     './CallingCodeSheet': { CallingCodeSheet: 'CallingSheet' }, './SignupOtp': { SignupOtp: 'Otp' },
     './SessionLimitSheet': { SessionLimitSheet: 'LimitSheet' },
+    './RecoveryScreen': { RecoveryScreen: 'Recovery' },
     './sessionLimit': load('../components/onboarding/sessionLimit.ts'),
     './session': { useDemoSession: () => ({ pending: false }), completeLogin: async token => { await complete(token); entered.push(token); } },
     '@/components/toast/ToastProvider': { useToast: () => ({ showToast }) },
@@ -63,6 +64,19 @@ async function password(app) {
   app.change('login-identifier', 'first@test.example'); await app.press('login-next');
   app.change('login-password', 'fixture-password');
 }
+test('Login exposes password and 2FA recovery and clears credentials when returning', async () => {
+  for (const kind of ['password', 'twofa']) {
+    const a = app('LoginScreen');
+    await password(a);
+    await a.press(kind === 'password' ? 'login-forgot-password' : 'login-reset-twofa');
+    assert.equal(a.type('Recovery').kind, kind);
+    assert.equal(a.type('Recovery').initialEmail, 'first@test.example');
+    a.type('Recovery').onDone(); a.render();
+    assert.equal(a.id('login-identifier').value, '');
+    assert.equal(a.type('Recovery'), undefined);
+    assert.equal(a.entered.length, 0);
+  }
+});
 function digits(app, code) {
   for (const digit of code) { app.type('Keypad').onKey(digit); app.render(); }
 }

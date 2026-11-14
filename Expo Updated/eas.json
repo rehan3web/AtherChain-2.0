@@ -3,8 +3,12 @@
   "build": {
     "preview": {
       "distribution": "internal",
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.atherchain.com" },
       "android": { "buildType": "apk" }
     },
-    "production": { "autoIncrement": true }
+    "production": {
+      "autoIncrement": true,
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.atherchain.com" }
+    }
   }
 }

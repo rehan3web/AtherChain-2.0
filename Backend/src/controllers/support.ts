@@ -3,28 +3,9 @@ import pool, { query } from '../db/postgres';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import axios from 'axios';
+import { sendExpoPush } from '../services/expoPush';
 import { emailService } from '../services/emailService';
 import SupportBroadcaster from '../services/SupportBroadcaster';
-
-async function sendExpoPushNotification(expoPushToken: string, title: string, body: string, data?: any) {
-    if (!expoPushToken || !expoPushToken.startsWith('ExponentPushToken')) return;
-    try {
-        await axios.post('https://exp.host/--/api/v2/push/send', {
-            to: expoPushToken,
-            title,
-            body,
-            data: data || {},
-            sound: 'default',
-            priority: 'high',
-        }, {
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            timeout: 8000,
-        });
-    } catch (err) {
-        console.error('Expo push notification error:', err);
-    }
-}
 
 // 1. Configure Multer for Support Tickets
 const storage = multer.diskStorage({
@@ -395,11 +376,11 @@ export const replyTicket = async (req: Request, res: Response) => {
                 const pushToken = userRes.rows[0]?.expo_push_token;
                 const statusLabel = newStatus === 'RESOLVED' ? 'Resolved' : newStatus === 'REJECTED' ? 'Rejected' : 'Open';
                 if (pushToken) {
-                    await sendExpoPushNotification(
+                    await sendExpoPush(
                         pushToken,
                         `Support Ticket #ATH-${id} Updated`,
                         `Status: ${statusLabel} — Our team has replied to your ticket.`,
-                        { ticketId: id, status: newStatus }
+                        { type: 'support_reply', ticketId: id, status: newStatus }
                     );
                 }
             } catch (pushErr) {

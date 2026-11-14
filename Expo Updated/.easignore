@@ -1,0 +1,29 @@
+# Keep build uploads small and exclude private credentials.
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+ios/
+android/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env*.local
+*.tsbuildinfo
+.vercel
+.env
+/generated-artifacts/
+
+# Public Firebase Android app configuration must reach the native build.
+# It remains ignored by Git; service-account private-key JSON must never go here.
+!/google-services.json

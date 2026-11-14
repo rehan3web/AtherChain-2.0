@@ -40,3 +40,4 @@ yarn-error.*
 
 .env
 /generated-artifacts/
+/google-services.json

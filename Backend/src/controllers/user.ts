@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { UserModel } from '../models/user';
 import { WalletService } from '../services/wallet';
 import { query } from '../db/postgres';
+import { isExpoPushToken } from '../services/expoPush';
 
 export const getProfile = async (req: Request | any, res: Response) => {
     try {
@@ -28,15 +29,12 @@ export const getProfile = async (req: Request | any, res: Response) => {
 export const registerPushToken = async (req: Request | any, res: Response) => {
     const userId = req.user?.id;
     const { expo_push_token } = req.body;
-    console.log(`📡 [Push Token API] Request received for userId: ${userId}, token: ${expo_push_token}`);
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
-    if (!expo_push_token) {
-        console.log(`📡 [Push Token API] Rejected: token is missing`);
-        return res.status(400).json({ message: 'expo_push_token is required' });
+    if (!isExpoPushToken(expo_push_token)) {
+        return res.status(400).json({ message: 'A valid Expo push token is required' });
     }
     try {
         await query('UPDATE users SET expo_push_token = $1 WHERE id = $2', [expo_push_token, userId]);
-        console.log(`📡 [Push Token API] Successfully updated database to: ${expo_push_token}`);
         res.json({ message: 'Push token registered' });
     } catch (error) {
         console.error('Register push token error:', error);

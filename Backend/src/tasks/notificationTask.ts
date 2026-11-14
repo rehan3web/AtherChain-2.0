@@ -2,37 +2,7 @@ import cron from 'node-cron';
 import { query } from '../db/postgres';
 import { SettingsModel } from '../models/settings';
 import redis from '../db/redis';
-import axios from 'axios';
-
-/**
- * Send Expo push notification to a single token.
- */
-async function sendExpoPushToToken(token: string, title: string, body: string, data?: any) {
-    if (!token || !token.startsWith('ExponentPushToken')) return false;
-    try {
-        const res = await axios.post('https://exp.host/--/api/v2/push/send', {
-            to: token,
-            title,
-            body,
-            data: data || {},
-            sound: 'default',
-            priority: 'high',
-            channelId: 'default',
-        }, {
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            timeout: 8000,
-        });
-        const ticket = res.data?.data;
-        if (ticket?.status === 'error') {
-            console.error(`  ❌ Push error: ${ticket.message} → ${token}`);
-            return false;
-        }
-        return true;
-    } catch (err: any) {
-        console.error('Expo push error:', token, err?.message || err);
-        return false;
-    }
-}
+import { sendExpoPush } from '../services/expoPush';
 
 export const initNotificationTask = () => {
     // ─── Mining Completion Reminder Cron ─────────────────────────────────────
@@ -54,6 +24,7 @@ export const initNotificationTask = () => {
                 WHERE u.last_mined_at IS NOT NULL
                 AND u.expo_push_token IS NOT NULL
                 AND u.expo_push_token != ''
+                AND u.mining_reminders_enabled = TRUE
                 AND u.last_mined_at + ($1 || ' hours')::INTERVAL <= NOW()
                 AND (u.last_reminder_sent_at IS NULL OR u.last_reminder_sent_at <= NOW() - INTERVAL '50 minutes')
                 AND u.is_blocked = FALSE
@@ -73,11 +44,11 @@ export const initNotificationTask = () => {
                     continue;
                 }
 
-                const success = await sendExpoPushToToken(
+                const success = await sendExpoPush(
                     row.expo_push_token,
                     '⛏️ Mining Complete!',
                     `Hey ${row.username || 'Miner'}, your mining cycle is done! Claim your ATH rewards now.`,
-                    { type: 'mining_complete', screen: '/(tabs)' }
+                    { type: 'mining_complete', screen: '/(tabs)/search' }
                 );
 
                 if (success) {

@@ -13,8 +13,8 @@ export const notificationAdapter: NotificationAdapter = {
   request: async () => {
     // Android 13+ needs a notification channel before its system prompt can appear.
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('general', {
-        name: 'General',
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'AtherChain',
         importance: Notifications.AndroidImportance.DEFAULT,
       });
     }

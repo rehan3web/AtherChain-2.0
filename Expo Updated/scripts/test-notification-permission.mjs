@@ -186,7 +186,7 @@ function nativeAdapter(platform, response) {
     'expo-notifications': {
       IosAuthorizationStatus: { PROVISIONAL: 3 }, AndroidImportance: { DEFAULT: 3 },
       getPermissionsAsync: async () => response,
-      setNotificationChannelAsync: async (id, settings) => { assert.equal(id, 'general'); assert.equal(settings.name, 'General'); calls.push('channel'); },
+      setNotificationChannelAsync: async (id, settings) => { assert.equal(id, 'default'); assert.equal(settings.name, 'AtherChain'); calls.push('channel'); },
       requestPermissionsAsync: async options => { calls.push('request'); requestOptions = options; return response; },
     },
   });

@@ -213,7 +213,7 @@ export const triggerMiningReminders = async (req: Request, res: Response) => {
             try {
                 await axios.post('https://exp.host/--/api/v2/push/send', {
                     to: token,
-                    title: '⛏️ Mining Complete!',
+                    title: 'Mining Complete',
                     body: `Hey ${row.username || 'Miner'}, your mining cycle is done! Claim your ATH rewards now.`,
                     data: { type: 'mining_complete', screen: '/(tabs)' },
                     sound: 'default',

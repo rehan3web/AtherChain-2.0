@@ -46,7 +46,7 @@ export const initNotificationTask = () => {
 
                 const success = await sendExpoPush(
                     row.expo_push_token,
-                    '⛏️ Mining Complete!',
+                    'Mining Complete',
                     `Hey ${row.username || 'Miner'}, your mining cycle is done! Claim your ATH rewards now.`,
                     { type: 'mining_complete', screen: '/(tabs)/search' }
                 );

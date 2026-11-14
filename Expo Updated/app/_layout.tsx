@@ -26,8 +26,8 @@ import { usePushRegistration } from '@/hooks/usePushRegistration';
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
-// Temporary skip requested by the user. Keep the permission flow available.
-const REQUIRE_NOTIFICATION_PERMISSION = false;
+// Native entry waits for the real OS notification grant.
+const REQUIRE_NOTIFICATION_PERMISSION = true;
 
 function RootLayoutNav() {
   const c = useColors();

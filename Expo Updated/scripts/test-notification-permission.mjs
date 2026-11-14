@@ -71,6 +71,20 @@ test('permanent denial does not try to display a forbidden system prompt', async
   assert.equal(store.getSnapshot().phase, 'blocked', 'Opening Settings alone must never fake a grant');
 });
 
+test('denial never loops prompts: foreground, retry and Allow only read or open Settings', async () => {
+  const { store, calls } = harness(askable, askable);
+  await store.start();
+  assert.equal(calls.request, 1);
+  for (let i = 0; i < 3; i++) {
+    await store.refresh();
+    await store.retry();
+    await store.openSettings();
+  }
+  assert.equal(calls.request, 1);
+  assert.equal(calls.settings, 3);
+  assert.equal(store.getSnapshot().phase, 'blocked');
+});
+
 test('returning from Settings proceeds only after the OS reports a grant', async () => {
   const { store, setPermission } = harness(denied);
   await store.start();
@@ -91,14 +105,14 @@ test('Allow rechecks a stale gate before opening Settings', async () => {
   assert.equal(calls.settings, 0);
 });
 
-test('explicit Allow can grant the project permission without reopening Settings', async () => {
+test('Allow opens Settings without another popup even when the OS permits asking again', async () => {
   const { store, setPermission, calls } = harness(denied, granted);
   await store.start();
   setPermission(askable);
   await store.openSettings();
-  assert.equal(calls.request, 1);
-  assert.equal(calls.settings, 0);
-  assert.equal(store.getSnapshot().phase, 'allowed');
+  assert.equal(calls.request, 0);
+  assert.equal(calls.settings, 1);
+  assert.equal(store.getSnapshot().phase, 'blocked');
 });
 
 test('permission revocation on a later foreground check restores the blocking screen', async () => {
@@ -126,7 +140,7 @@ test('fast Settings returns queue a fresh check instead of losing the grant', as
   assert.equal(store.getSnapshot().phase, 'allowed');
 });
 
-test('failed permission reads and requests fail closed and support a real retry', async () => {
+test('failed reads or prompts fail closed; retry only checks the OS without reprompting', async () => {
   for (const method of ['read', 'request']) {
     const { adapter } = harness(askable, granted);
     const original = adapter[method];
@@ -137,6 +151,7 @@ test('failed permission reads and requests fail closed and support a real retry'
     assert.match(store.getSnapshot().error, /Could not check/);
     assert.equal(store.getSnapshot().busy, false);
     adapter[method] = original;
+    adapter.read = async () => granted;
     await store.retry();
     assert.equal(store.getSnapshot().phase, 'allowed');
     assert.equal(store.getSnapshot().error, null);
@@ -248,7 +263,7 @@ test('gate listens for Settings return and never mounts the entry flow while blo
 test('native gate wraps the unchanged onboarding/session routing and is configured for native builds', () => {
   const layout = fs.readFileSync(new URL('../app/_layout.tsx', import.meta.url), 'utf8');
   assert.match(layout, /<NotificationPermissionGate required=\{REQUIRE_NOTIFICATION_PERMISSION\}><RootLayoutNav \/><\/NotificationPermissionGate>/);
-  assert.match(layout, /const REQUIRE_NOTIFICATION_PERMISSION = false;/);
+  assert.match(layout, /const REQUIRE_NOTIFICATION_PERMISSION = true;/);
   assert.match(layout, /guard=\{!entry.entered\}/);
   assert.match(layout, /guard=\{entry.entered\}/);
   const config = JSON.parse(fs.readFileSync(new URL('../app.json', import.meta.url), 'utf8'));
@@ -274,10 +289,10 @@ test('temporary native skip bypasses all OS permission, Settings and lifecycle w
   effects.forEach(effect => assert.equal(effect(), undefined));
 });
 
-test('blocked gate rereads delayed permission updates only while active and cleans up its timer', () => {
+test('the gate never polls or automatically retries in any permission state', () => {
   for (const phase of ['checking', 'blocked', 'allowed']) {
     const effects = [];
-    let poll, refreshes = 0, cleared = false;
+    let refreshes = 0;
     const appState = { currentState: 'active', addEventListener: () => ({ remove() {} }) };
     const store = {
       subscribe: () => () => {},
@@ -294,20 +309,13 @@ test('blocked gate rereads delayed permission updates only while active and clea
       './model': { createNotificationPermissionStore: () => store },
       './NotificationPermissionScreen': { NotificationPermissionScreen: 'NotificationPermissionScreen' },
     }, {
-      setInterval: (callback, delay) => { poll = callback; assert.equal(delay, 1500); return 42; },
-      clearInterval: timer => { assert.equal(timer, 42); cleared = true; },
+      setInterval: () => assert.fail('No periodic permission checks'),
+      setTimeout: () => assert.fail('No automatic retry timers'),
     });
     NotificationPermissionGate({ children: 'normal-entry' });
     const cleanups = effects.map(effect => effect());
-    if (phase === 'blocked') {
-      poll(); assert.equal(refreshes, 1);
-      appState.currentState = 'background';
-      poll(); assert.equal(refreshes, 1);
-      appState.currentState = 'active';
-      poll(); assert.equal(refreshes, 2);
-    } else assert.equal(poll, undefined);
+    assert.equal(refreshes, 0);
     cleanups.forEach(cleanup => cleanup?.());
-    assert.equal(cleared, phase === 'blocked');
   }
 });
 

@@ -2,7 +2,7 @@
 
 ## What is connected
 
-- An installed native app requests notification permission after sign-in, creates Android channel `default`, and registers its Expo token at authenticated `POST /user/push-token`.
+- On native startup, the gate requests notification permission once if the OS permits. Allow continues to login/app; denial shows the gate. Its Allow button opens Settings without another popup. Returning from Settings checks the OS once per lifecycle event; there is no polling or automatic retry. Token registration runs after sign-in at authenticated `POST /user/push-token`, using Android channel `default`.
 - Foreground notifications show a banner and sound. Receiving a push invalidates relevant cached data; this does not poll.
 - Tapping a mining push opens Mining. Tapping a Help reply opens its ticket, including when starting a closed app.
 - The backend hourly cron sends mining reminders only for opted-in, non-blocked, non-paused users whose cycle and Redis cooldown expired. Existing hourly repeat behavior is unchanged.

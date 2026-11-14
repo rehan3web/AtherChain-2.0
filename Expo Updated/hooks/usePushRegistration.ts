@@ -22,7 +22,6 @@ export function usePushRegistration(signedIn: boolean) {
     let cancelled = false;
     let registered: string | null = null;
     let registering = false;
-    let asked = false;
     let lastOpened: string | null = null;
     const register = async () => {
       if (registering || cancelled || Constants.executionEnvironment === 'storeClient') return;
@@ -33,11 +32,8 @@ export function usePushRegistration(signedIn: boolean) {
             name: 'AtherChain', importance: Notifications.AndroidImportance.HIGH,
           });
         }
-        let permissions = await Notifications.getPermissionsAsync();
-        if (!cancelled && permissions.status !== 'granted' && permissions.canAskAgain && !asked) {
-          asked = true;
-          permissions = await Notifications.requestPermissionsAsync();
-        }
+        // The startup gate owns the single permission prompt, never registration.
+        const permissions = await Notifications.getPermissionsAsync();
         if (permissions.status !== 'granted') return;
         const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
         if (!projectId) throw new Error('Push delivery needs the Expo EAS project ID in the native build configuration.');

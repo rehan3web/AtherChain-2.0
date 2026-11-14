@@ -18,15 +18,6 @@ export function NotificationPermissionGate({ children, required = true }: { chil
     void store.start();
     return () => { listener.remove(); focus.remove(); };
   }, [store, enabled]);
-  useEffect(() => {
-    if (!enabled || state.phase !== 'blocked') return;
-    // Native Settings can publish the new permission after the resume event.
-    // Read only while the blocking screen is visible and the app is active.
-    const timer = setInterval(() => {
-      if (AppState.currentState === 'active') void store.refresh();
-    }, 1500);
-    return () => clearInterval(timer);
-  }, [store, state.phase, enabled]);
   if (state.phase === 'allowed') return children;
   return <NotificationPermissionScreen state={state}
     onAllow={() => { void store.openSettings(); }}

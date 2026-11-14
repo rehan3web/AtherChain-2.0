@@ -65,6 +65,7 @@ test('mining cron respects reminder preferences, Redis cooldown and records only
   await run();
   assert.match(queries[0][0], /u\.mining_reminders_enabled = TRUE/);
   assert.equal(sends.length, 2);
+  assert.equal(sends[0][1], 'Mining Complete');
   assert.equal(sends[0][3].type, 'mining_complete');
   assert.equal(queries.length, 2);
   assert.equal(queries[1][1][0], 2);
@@ -102,23 +103,23 @@ function native({ platform = 'android', go = false, signedIn = true, cold = null
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const response = (data, id = 'one') => ({ actionIdentifier: 'default', notification: { request: { identifier: id, content: { data } } } });
 
-test('Android creates matching channel, requests permission and registers once per token', async () => {
-  const app = native();
+test('Android creates matching channel and registers granted permission without another popup', async () => {
+  const app = native({ permission: 'granted' });
   await settle();
   assert.equal(app.calls.channels[0][0], 'default');
-  assert.equal(app.calls.requests, 1);
+  assert.equal(app.calls.requests, 0);
   assert.deepEqual(app.calls.tokens, [token]);
   app.events.active('active');
   app.events.active('active');
   await settle();
-  assert.equal(app.calls.requests, 1);
+  assert.equal(app.calls.requests, 0);
   assert.equal(app.calls.tokens.length, 1);
   const handler = await app.handler.handleNotification();
   assert.equal(handler.shouldShowBanner, true);
   assert.equal(handler.shouldPlaySound, true);
 });
 test('web, logged-out and Expo Go do not register remote push; denied permission is not reprompted', async () => {
-  for (const options of [{ platform: 'web' }, { signedIn: false }, { go: true }, { permission: 'denied' }]) {
+  for (const options of [{ platform: 'web' }, { signedIn: false }, { go: true }, { permission: 'denied' }, { permission: 'undetermined' }]) {
     const app = native(options);
     await settle();
     assert.equal(app.calls.tokens.length, 0);

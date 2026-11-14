@@ -52,7 +52,7 @@ export function createNotificationPermissionStore(adapter: NotificationAdapter) 
       started = true;
       return check(true);
     },
-    retry: () => check(true),
+    retry: () => check(false),
     refresh: () => {
       if (operation) { refreshQueued = true; return operation; }
       return check(false);
@@ -60,9 +60,7 @@ export function createNotificationPermissionStore(adapter: NotificationAdapter) 
     openSettings: () => perform(
       async () => {
         // A stale gate must not send an already-authorized user back to Settings.
-        // In Expo Go this explicit action can also request the project's scope.
-        let permission = await adapter.read();
-        if (!permission.granted && permission.canAskAgain) permission = await adapter.request();
+        const permission = await adapter.read();
         if (permission.granted) {
           publish({ phase: 'allowed' });
           return;
